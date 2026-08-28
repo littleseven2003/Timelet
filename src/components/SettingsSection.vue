@@ -55,38 +55,42 @@ async function toggleShowExpired(enabled: boolean) {
   <section class="settings">
     <h2 class="settings__title">{{ t('config.nav.settings') }}</h2>
 
-    <label class="settings__row">
-      <div class="settings__text">
-        <span class="settings__label">{{ t('settings.launchAtLogin') }}</span>
-        <span class="settings__desc">{{ t('settings.launchAtLoginDesc') }}</span>
-        <span v-if="launchError" class="settings__error">{{ t('settings.launchError') }}</span>
-      </div>
-      <input
-        type="checkbox"
-        class="settings__switch"
-        :checked="launchEnabled"
-        @change="toggleLaunch(($event.target as HTMLInputElement).checked)"
-      />
-    </label>
+    <div class="settings-card">
+      <label class="settings-row">
+        <div class="settings-row__text">
+          <span class="settings-row__label">{{ t('settings.launchAtLogin') }}</span>
+          <span class="settings-row__desc">{{ t('settings.launchAtLoginDesc') }}</span>
+          <span v-if="launchError" class="settings-row__error">{{ t('settings.launchError') }}</span>
+        </div>
+        <input
+          type="checkbox"
+          class="settings-switch"
+          :checked="launchEnabled"
+          @change="toggleLaunch(($event.target as HTMLInputElement).checked)"
+        />
+      </label>
 
-    <label class="settings__row">
-      <div class="settings__text">
-        <span class="settings__label">{{ t('settings.showExpired') }}</span>
-        <span class="settings__desc">{{ t('settings.showExpiredDesc') }}</span>
-      </div>
-      <input
-        type="checkbox"
-        class="settings__switch"
-        :checked="settings.showExpired"
-        @change="toggleShowExpired(($event.target as HTMLInputElement).checked)"
-      />
-    </label>
+      <div class="settings-card__divider" />
+
+      <label class="settings-row">
+        <div class="settings-row__text">
+          <span class="settings-row__label">{{ t('settings.showExpired') }}</span>
+          <span class="settings-row__desc">{{ t('settings.showExpiredDesc') }}</span>
+        </div>
+        <input
+          type="checkbox"
+          class="settings-switch"
+          :checked="settings.showExpired"
+          @change="toggleShowExpired(($event.target as HTMLInputElement).checked)"
+        />
+      </label>
+    </div>
   </section>
 </template>
 
 <style scoped>
+/* 与条目管理页的分区卡片保持同一套视觉变量 */
 .settings {
-  max-width: 480px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -95,44 +99,52 @@ async function toggleShowExpired(enabled: boolean) {
 .settings__title {
   font-size: 16px;
   font-weight: 600;
-  margin: 0 0 4px;
+  margin: 0;
 }
 
-.settings__row {
+.settings-card {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  background-color: #fff;
+  padding: 4px 16px;
+}
+
+.settings-card__divider {
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+.settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
-  background-color: #fff;
+  padding: 12px 0;
   cursor: pointer;
 }
 
-.settings__text {
+.settings-row__text {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.settings__label {
+.settings-row__label {
   font-size: 14px;
   font-weight: 500;
 }
 
-.settings__desc {
+.settings-row__desc {
   font-size: 12px;
   opacity: 0.55;
 }
 
-.settings__error {
+.settings-row__error {
   font-size: 12px;
   color: #d33;
 }
 
-/* 开关样式 */
-.settings__switch {
+.settings-switch {
   appearance: none;
   width: 38px;
   height: 22px;
@@ -144,7 +156,7 @@ async function toggleShowExpired(enabled: boolean) {
   transition: background-color 0.2s;
 }
 
-.settings__switch::after {
+.settings-switch::after {
   content: '';
   position: absolute;
   top: 2px;
@@ -156,25 +168,29 @@ async function toggleShowExpired(enabled: boolean) {
   transition: transform 0.2s;
 }
 
-.settings__switch:checked {
+.settings-switch:checked {
   background-color: #0067c0;
 }
 
-.settings__switch:checked::after {
+.settings-switch:checked::after {
   transform: translateX(16px);
 }
 
 @media (prefers-color-scheme: dark) {
-  .settings__row {
+  .settings-card {
     background-color: #333;
     border-color: rgba(255, 255, 255, 0.12);
   }
 
-  .settings__switch {
+  .settings-card__divider {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .settings-switch {
     background-color: rgba(255, 255, 255, 0.22);
   }
 
-  .settings__switch:checked {
+  .settings-switch:checked {
     background-color: #0067c0;
   }
 }
