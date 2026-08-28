@@ -28,11 +28,8 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&open_config_item, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
-        .icon(
-            app.default_window_icon()
-                .expect("应用图标缺失，无法创建托盘图标")
-                .clone(),
-        )
+        // 托盘使用独立的黑色字形图标：实底应用图标作模板渲染会变成色块
+        .icon(tauri::include_image!("icons/tray.png"))
         .tooltip("Timelet（时屿）")
         .menu(&menu)
         .show_menu_on_left_click(false)
