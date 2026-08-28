@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { invoke } from '@tauri-apps/api/core';
 import type { Entry } from './types/entry';
 import { useEntries } from './composables/useEntries';
 import { getSettings } from './api/settings';
@@ -68,6 +69,13 @@ function timedText(entry: Entry, nowMs: number): string {
   return expired ? t('panel.expiredOnly') : t('panel.soon');
 }
 
+// 右键唤起原生菜单：条目上传入 id（编辑详情/打开主界面），空白处仅打开主界面
+function showContextMenu(entryId: string | null) {
+  invoke('show_panel_menu', { entryId }).catch(() => {
+    /* 菜单唤起失败时静默 */
+  });
+}
+
 onMounted(async () => {
   reload();
   ensureChangeListener();
@@ -85,7 +93,7 @@ onUnmounted(() => clearInterval(ticker));
 </script>
 
 <template>
-  <aside class="panel">
+  <aside class="panel" @contextmenu.prevent="showContextMenu(null)">
     <header class="panel__header">
       <span class="panel__date">{{ today.date }}</span>
       <span class="panel__weekday">{{ today.weekday }}</span>
@@ -97,7 +105,12 @@ onUnmounted(() => clearInterval(ticker));
     </div>
 
     <ul v-else class="panel__list">
-      <li v-for="entry in sorted" :key="entry.id" class="panel-item">
+      <li
+        v-for="entry in sorted"
+        :key="entry.id"
+        class="panel-item"
+        @contextmenu.prevent.stop="showContextMenu(entry.id)"
+      >
         <span class="panel-item__color" :style="{ backgroundColor: entry.color }" />
         <span class="panel-item__name" :title="entry.name">{{ entry.name }}</span>
         <span

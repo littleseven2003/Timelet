@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { Entry } from './types/entry';
 import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
@@ -56,8 +58,6 @@ function onDragEnd() {
   previewList.value = null;
 }
 
-onMounted(() => reload());
-
 function openCreate() {
   isNew.value = true;
   editing.value = createDraft();
@@ -92,6 +92,25 @@ async function confirmRemove() {
   await remove(deletingId.value);
   deletingId.value = null;
 }
+
+// 从面板"编辑详情"进入：数据就绪后按 id 打开编辑表单
+async function openEditorById(id: string) {
+  if (activeNav.value !== 'entries') activeNav.value = 'entries';
+  if (!loaded.value) await reload();
+  const entry = entries.value.find((item) => item.id === id);
+  if (entry) openEdit(entry);
+}
+
+onMounted(async () => {
+  await reload();
+  // 窗口先于面板右键动作创建时，取走暂存的待编辑条目
+  const pendingId = await invoke<string | null>('take_pending_edit');
+  if (pendingId) await openEditorById(pendingId);
+  // 窗口已存在时后续动作通过事件送达
+  listen<string>('open-entry-editor', (event) => {
+    void openEditorById(event.payload);
+  });
+});
 </script>
 
 <template>

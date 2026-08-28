@@ -21,11 +21,13 @@ struct PanelBlurState(Mutex<Option<Instant>>);
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
     app.manage(PanelBlurState::default());
+    app.manage(PanelMenuEntry::default());
     watch_panel_blur(app);
+    watch_panel_menu_events(app);
 
-    let open_config_item = MenuItem::with_id(app, "open-config", "打开配置", true, None::<&str>)?;
+    let open_main_item = MenuItem::with_id(app, "open-main", "打开主界面", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出 Timelet", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open_config_item, &quit])?;
+    let menu = Menu::with_items(app, &[&open_main_item, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
         // 托盘使用独立的黑色字形图标：实底应用图标作模板渲染会变成色块
@@ -34,8 +36,8 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {
-            if event.id() == "open-config" {
-                open_config(app);
+            if event.id() == "open-main" {
+                open_main(app, None);
             } else if event.id() == "quit" {
                 app.exit(0);
             }
@@ -63,13 +65,46 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-// 打开（或聚焦已存在的）配置窗口；窗口按需创建，避免启动即建
-fn open_config(app: &AppHandle) {
+// 面板右键菜单选中的条目 id：菜单事件在全局处理器中消费
+#[derive(Default)]
+struct PanelMenuEntry(Mutex<Option<String>>);
+
+// 面板右键菜单事件走 App 级监听，id 加前缀与托盘菜单区分
+fn watch_panel_menu_events(app: &AppHandle) {
+    app.on_menu_event(move |app, event| {
+        let id = event.id().0.as_str();
+        if id == "panel-edit" {
+            let state = app.state::<PanelMenuEntry>();
+            let entry_id = state.0.lock().unwrap().take();
+            open_main(app, entry_id);
+        } else if id == "panel-open-main" {
+            open_main(app, None);
+        }
+    });
+}
+
+// 待编辑条目 id：面板"编辑详情"先于配置窗口就绪时暂存，窗口挂载后取走
+#[derive(Default)]
+pub struct PendingEditEntry(Mutex<Option<String>>);
+
+// 打开（或聚焦已存在的）主界面；带 entry_id 时进入该条目的编辑态
+// 窗口已存在则直接发事件；新创建则暂存 id 供挂载后取用
+pub fn open_main(app: &AppHandle, entry_id: Option<String>) {
+    use tauri::Emitter;
+
     if let Some(window) = app.get_webview_window("config") {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+        if let Some(id) = entry_id {
+            let _ = app.emit("open-entry-editor", id);
+        }
         return;
+    }
+
+    if let Some(id) = &entry_id {
+        let pending = app.state::<PendingEditEntry>();
+        *pending.0.lock().unwrap() = Some(id.clone());
     }
 
     let result = tauri::webview::WebviewWindowBuilder::new(
@@ -83,8 +118,41 @@ fn open_config(app: &AppHandle) {
     .build();
 
     if let Err(err) = result {
-        eprintln!("打开配置窗口失败: {err}");
+        eprintln!("打开主界面失败: {err}");
     }
+}
+
+// 面板右键菜单：条目上为"编辑详情 / 打开主界面"，空白处为"打开主界面"
+#[tauri::command]
+pub fn show_panel_menu(
+    app: AppHandle,
+    window: tauri::Window,
+    entry_id: Option<String>,
+) -> Result<(), String> {
+    use tauri::menu::{ContextMenu, Menu, MenuItem};
+
+    let state = app.state::<PanelMenuEntry>();
+    *state.0.lock().unwrap() = entry_id.clone();
+
+    let edit_item = MenuItem::with_id(
+        &app,
+        "panel-edit",
+        "编辑详情",
+        entry_id.is_some(),
+        None::<&str>,
+    )
+    .map_err(|e| e.to_string())?;
+    let open_item = MenuItem::with_id(&app, "panel-open-main", "打开主界面", true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let menu = Menu::with_items(&app, &[&edit_item, &open_item]).map_err(|e| e.to_string())?;
+
+    menu.popup(window).map_err(|e| e.to_string())
+}
+
+// 配置窗口挂载后取走暂存的待编辑条目 id
+#[tauri::command]
+pub fn take_pending_edit(state: tauri::State<'_, PendingEditEntry>) -> Option<String> {
+    state.0.lock().unwrap().take()
 }
 
 // 左键点击托盘图标时切换面板显隐，并在显示前按图标位置重新定位
