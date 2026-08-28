@@ -50,6 +50,11 @@ function showContextMenu(entryId: string | null) {
   });
 }
 
+// 悬停标题：备注拼在名称下方展示
+function entryTitle(entry: Entry): string {
+  return entry.note ? `${entry.name}\n${entry.note}` : entry.name;
+}
+
 onMounted(async () => {
   reload();
   ensureChangeListener();
@@ -86,7 +91,7 @@ onUnmounted(() => clearInterval(ticker));
         @contextmenu.prevent.stop="showContextMenu(entry.id)"
       >
         <span class="panel-item__color" :style="{ backgroundColor: entry.color }" />
-        <span class="panel-item__name" :title="entry.name">{{ entry.name }}</span>
+        <span class="panel-item__name" :title="entryTitle(entry)">{{ entry.name }}</span>
         <span
           class="panel-item__days"
           :style="{ color: entry.color }"

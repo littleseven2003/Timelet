@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { Entry } from './types/entry';
+import type { DisplayUnit, Entry } from './types/entry';
 import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
 import { formatEntryText, sortEntries } from './utils/entries';
@@ -205,6 +205,22 @@ onMounted(async () => {
                 />
                 <span>{{ t('config.includeTime') }}</span>
               </label>
+
+              <template v-if="!editing.time">
+                <span class="entry-form__label">{{ t('config.fieldUnit') }}</span>
+                <div class="entry-form__options">
+                  <button
+                    v-for="unit in (['day', 'week', 'month', 'year'] as DisplayUnit[])"
+                    :key="unit"
+                    type="button"
+                    class="entry-form__option"
+                    :class="{ 'entry-form__option--active': (editing.displayUnit ?? 'day') === unit }"
+                    @click="editing.displayUnit = unit"
+                  >
+                    {{ t(`config.unit.${unit}`) }}
+                  </button>
+                </div>
+              </template>
             </section>
 
             <section class="form-section">
@@ -226,6 +242,14 @@ onMounted(async () => {
                 <input v-model="editing.pinned" type="checkbox" />
                 <span>{{ t('config.fieldPinned') }}</span>
               </label>
+              <span class="entry-form__label">{{ t('config.fieldNote') }}</span>
+              <textarea
+                v-model="editing.note"
+                class="entry-form__input entry-form__note"
+                rows="2"
+                :placeholder="t('config.notePlaceholder')"
+                maxlength="100"
+              />
             </section>
           </div>
 
@@ -560,6 +584,12 @@ onMounted(async () => {
   font-size: 16px;
   font-weight: 600;
   padding: 10px 12px;
+}
+
+.entry-form__note {
+  resize: none;
+  font-family: inherit;
+  line-height: 1.5;
 }
 
 .entry-form__footer {

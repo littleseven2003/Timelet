@@ -1,9 +1,16 @@
-import type { Entry } from '../types/entry';
+import type { DisplayUnit, Entry } from '../types/entry';
 
 // 解析 ISO 日期（YYYY-MM-DD）为本地时区的当日零点
 function parseLocalDate(isoDate: string): Date {
   const [year, month, day] = isoDate.split('-').map(Number);
   return new Date(year!, month! - 1, day!);
+}
+
+// 两个自然日之间的整月差（不足整月舍去）
+function calendarMonthsBetween(from: Date, to: Date): number {
+  let months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  if (to.getDate() < from.getDate()) months -= 1;
+  return months;
 }
 
 // 今日零点
@@ -34,6 +41,20 @@ export function entryDays(entry: Entry, today: Date = startOfToday()): number {
   return entry.entryType === 'elapsed' ? -diff : diff;
 }
 
+// 按展示单位换算条目数值（倒计时为剩余、正计时为已过；周向下取整、月/年按日历整月差）；仅纯日期条目
+export function entryUnitValue(entry: Entry, unit: DisplayUnit): number | null {
+  if (entry.time) return null;
+  const days = entryDays(entry);
+  if (unit === 'day') return days;
+  if (unit === 'week') return Math.trunc(days / 7);
+
+  const today = startOfToday();
+  const from = entry.entryType === 'countdown' ? today : parseLocalDate(entry.date);
+  const to = entry.entryType === 'countdown' ? parseLocalDate(entry.date) : today;
+  const months = calendarMonthsBetween(from, to);
+  return unit === 'month' ? months : Math.trunc(months / 12);
+}
+
 // 是否为已过期的倒计时条目（带时刻按时刻判定，纯日期按自然日判定）
 export function isExpiredCountdown(entry: Entry, nowMs: number = Date.now()): boolean {
   if (entry.entryType !== 'countdown') return false;
@@ -43,15 +64,38 @@ export function isExpiredCountdown(entry: Entry, nowMs: number = Date.now()): bo
 // 展示文案翻译函数的最小形状（兼容 vue-i18n 的 t）
 type Translate = (key: string, params?: Record<string, number>) => string;
 
-// 条目展示文案：天数（今天/剩余/已过期/已过）或时刻精确间隔，供面板与编辑预览共用
+// 条目展示文案：天数（今天/剩余/已过期/已过）、时刻精确间隔或按展示单位换算，供面板与编辑预览共用；
+// 单位换算结果不足 1 时回退到按天展示
 export function formatEntryText(entry: Entry, nowMs: number, t: Translate): string {
   if (!entry.date) return '';
   if (entry.time) return timedText(entry, nowMs, t);
+
   const days = entryDays(entry);
-  if (entry.entryType === 'elapsed') return t('panel.elapsed', { days });
+  const unit = entry.displayUnit ?? 'day';
+
+  if (entry.entryType === 'elapsed') {
+    if (unit !== 'day') {
+      const value = entryUnitValue(entry, unit) ?? 0;
+      if (value > 0) return t(`panel.elapsedUnits.${unit}`, { n: value });
+    }
+    return t('panel.elapsed', { days });
+  }
+
   if (days === 0) return t('panel.today');
-  if (days < 0) return t('panel.expired', { days: -days });
-  return t('panel.daysLeft', { days });
+
+  if (days > 0) {
+    if (unit !== 'day') {
+      const value = entryUnitValue(entry, unit) ?? 0;
+      if (value > 0) return t(`panel.units.${unit}`, { n: value });
+    }
+    return t('panel.daysLeft', { days });
+  }
+
+  if (unit !== 'day') {
+    const value = -(entryUnitValue(entry, unit) ?? 0);
+    if (value > 0) return t(`panel.expiredUnits.${unit}`, { n: value });
+  }
+  return t('panel.expired', { days: -days });
 }
 
 // 带时刻条目按精确间隔展示：天+小时 → 小时+分 → 分钟

@@ -20,6 +20,10 @@ pub struct Entry {
     pub date: String,
     // 可选时刻（HH:mm），缺失表示纯日期条目
     pub time: Option<String>,
+    // 展示单位（day/week/month/year），缺失按天
+    pub display_unit: Option<String>,
+    // 选填备注，面板悬停时展示
+    pub note: Option<String>,
     pub color: String,
     pub pinned: bool,
     // 手动排序值（拖拽后生成），缺失表示按自动规则排序

@@ -22,6 +22,21 @@ export default {
       hoursMinutes: '已过期 {h} 小时 {m} 分',
       minutes: '已过期 {m} 分钟',
     },
+    units: {
+      week: '剩余 {n} 周',
+      month: '剩余 {n} 个月',
+      year: '剩余 {n} 年',
+    },
+    expiredUnits: {
+      week: '已过期 {n} 周',
+      month: '已过期 {n} 个月',
+      year: '已过期 {n} 年',
+    },
+    elapsedUnits: {
+      week: '已过 {n} 周',
+      month: '已过 {n} 个月',
+      year: '已过 {n} 年',
+    },
   },
   config: {
     nav: {
@@ -49,6 +64,15 @@ export default {
     fieldColor: '颜色',
     fieldPinned: '置顶显示',
     includeTime: '包含时刻',
+    fieldUnit: '显示单位',
+    unit: {
+      day: '天',
+      week: '周',
+      month: '月',
+      year: '年',
+    },
+    fieldNote: '备注',
+    notePlaceholder: '选填，鼠标悬停面板条目时显示',
     pinnedTag: '置顶',
     save: '保存',
     cancel: '取消',

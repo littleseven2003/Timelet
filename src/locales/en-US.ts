@@ -23,6 +23,21 @@ export default {
       hoursMinutes: 'Expired {h} h {m} m ago',
       minutes: 'Expired {m} min ago',
     },
+    units: {
+      week: '{n} weeks left',
+      month: '{n} months left',
+      year: '{n} years left',
+    },
+    expiredUnits: {
+      week: 'Expired {n} weeks ago',
+      month: 'Expired {n} months ago',
+      year: 'Expired {n} years ago',
+    },
+    elapsedUnits: {
+      week: '{n} weeks passed',
+      month: '{n} months passed',
+      year: '{n} years passed',
+    },
   },
   config: {
     nav: {
@@ -50,6 +65,15 @@ export default {
     fieldColor: 'Color',
     fieldPinned: 'Pinned',
     includeTime: 'Include time',
+    fieldUnit: 'Display unit',
+    unit: {
+      day: 'Day',
+      week: 'Week',
+      month: 'Month',
+      year: 'Year',
+    },
+    fieldNote: 'Note',
+    notePlaceholder: 'Optional, shown when hovering the entry in the panel',
     pinnedTag: 'Pinned',
     save: 'Save',
     cancel: 'Cancel',
