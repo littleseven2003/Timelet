@@ -63,6 +63,8 @@ export default {
     startDate: '起始日期',
     fieldColor: '颜色',
     fieldPinned: '置顶显示',
+    pinnedOn: '已置顶',
+    pinnedOff: '未置顶',
     includeTime: '包含时刻',
     fieldUnit: '显示单位',
     unit: {

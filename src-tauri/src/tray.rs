@@ -113,8 +113,8 @@ pub fn open_main(app: &AppHandle, entry_id: Option<String>) {
         tauri::WebviewUrl::App("index.html".into()),
     )
     .title("Timelet 设置")
-    .inner_size(640.0, 480.0)
-    .min_inner_size(560.0, 420.0)
+    .inner_size(780.0, 560.0)
+    .min_inner_size(700.0, 520.0)
     .build();
 
     if let Err(err) = result {

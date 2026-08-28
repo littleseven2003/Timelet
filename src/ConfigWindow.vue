@@ -156,7 +156,7 @@ onMounted(async () => {
           </div>
 
           <div class="entry-form__body">
-            <section class="form-section">
+            <section class="form-section form-section--basic">
               <h3 class="form-section__title">{{ t('config.sectionBasic') }}</h3>
               <input
                 v-model="editing.name"
@@ -185,7 +185,7 @@ onMounted(async () => {
               </div>
             </section>
 
-            <section class="form-section">
+            <section class="form-section form-section--time">
               <h3 class="form-section__title">{{ t('config.sectionTime') }}</h3>
               <span class="entry-form__label">
                 {{ editing.entryType === 'countdown' ? t('config.targetDate') : t('config.startDate') }}
@@ -223,33 +223,39 @@ onMounted(async () => {
               </template>
             </section>
 
-            <section class="form-section">
-              <h3 class="form-section__title">{{ t('config.sectionAppearance') }}</h3>
-              <span class="entry-form__label">{{ t('config.fieldColor') }}</span>
-              <div class="entry-form__colors">
-                <button
-                  v-for="color in ENTRY_COLORS"
-                  :key="color"
-                  type="button"
-                  class="entry-form__color"
-                  :class="{ 'entry-form__color--active': editing.color === color }"
-                  :style="{ backgroundColor: color }"
-                  :aria-label="color"
-                  @click="editing.color = color"
+            <section class="form-section form-section--appearance">
+              <div class="appearance-field">
+                <span class="entry-form__label">{{ t('config.fieldColor') }}</span>
+                <div class="entry-form__colors">
+                  <button
+                    v-for="color in ENTRY_COLORS"
+                    :key="color"
+                    type="button"
+                    class="entry-form__color"
+                    :class="{ 'entry-form__color--active': editing.color === color }"
+                    :style="{ backgroundColor: color }"
+                    :aria-label="color"
+                    @click="editing.color = color"
+                  />
+                </div>
+              </div>
+              <div class="appearance-field">
+                <span class="entry-form__label">{{ t('config.fieldPinned') }}</span>
+                <label class="entry-form__toggle">
+                  <input v-model="editing.pinned" type="checkbox" />
+                  <span>{{ editing.pinned ? t('config.pinnedOn') : t('config.pinnedOff') }}</span>
+                </label>
+              </div>
+              <div class="appearance-field appearance-field--grow">
+                <span class="entry-form__label">{{ t('config.fieldNote') }}</span>
+                <textarea
+                  v-model="editing.note"
+                  class="entry-form__input entry-form__note"
+                  rows="2"
+                  :placeholder="t('config.notePlaceholder')"
+                  maxlength="100"
                 />
               </div>
-              <label class="entry-form__toggle">
-                <input v-model="editing.pinned" type="checkbox" />
-                <span>{{ t('config.fieldPinned') }}</span>
-              </label>
-              <span class="entry-form__label">{{ t('config.fieldNote') }}</span>
-              <textarea
-                v-model="editing.note"
-                class="entry-form__input entry-form__note"
-                rows="2"
-                :placeholder="t('config.notePlaceholder')"
-                maxlength="100"
-              />
             </section>
           </div>
 
@@ -516,7 +522,6 @@ onMounted(async () => {
 }
 
 .entry-form {
-  max-width: 560px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -557,10 +562,47 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
 }
 
+/* 双栏网格：预览通栏 → 基本信息/时间并排 → 外观通栏 */
 .entry-form__body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    'preview preview'
+    'basic time'
+    'appearance appearance';
+  gap: 12px;
+  align-items: start;
+}
+
+.entry-preview {
+  grid-area: preview;
+}
+
+.form-section--basic {
+  grid-area: basic;
+}
+
+.form-section--time {
+  grid-area: time;
+}
+
+.form-section--appearance {
+  grid-area: appearance;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.appearance-field {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+}
+
+.appearance-field--grow {
+  flex: 1;
+  min-width: 220px;
 }
 
 .form-section {

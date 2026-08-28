@@ -64,6 +64,8 @@ export default {
     startDate: 'Start date',
     fieldColor: 'Color',
     fieldPinned: 'Pinned',
+    pinnedOn: 'Pinned',
+    pinnedOff: 'Not pinned',
     includeTime: 'Include time',
     fieldUnit: 'Display unit',
     unit: {
