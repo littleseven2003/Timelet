@@ -156,35 +156,7 @@ onMounted(async () => {
           </div>
 
           <div class="entry-form__body">
-            <section class="form-section form-section--basic">
-              <h3 class="form-section__title">{{ t('config.sectionBasic') }}</h3>
-              <input
-                v-model="editing.name"
-                class="entry-form__input entry-form__input--hero"
-                type="text"
-                :placeholder="t('config.namePlaceholder')"
-                maxlength="30"
-              />
-              <div class="entry-form__options">
-                <button
-                  type="button"
-                  class="entry-form__option"
-                  :class="{ 'entry-form__option--active': editing.entryType === 'countdown' }"
-                  @click="editing.entryType = 'countdown'"
-                >
-                  {{ t('config.typeCountdown') }}
-                </button>
-                <button
-                  type="button"
-                  class="entry-form__option"
-                  :class="{ 'entry-form__option--active': editing.entryType === 'elapsed' }"
-                  @click="editing.entryType = 'elapsed'"
-                >
-                  {{ t('config.typeElapsed') }}
-                </button>
-              </div>
-            </section>
-
+            <!-- 左列：日期时间组件作为视觉锚点独占 -->
             <section class="form-section form-section--time">
               <h3 class="form-section__title">{{ t('config.sectionTime') }}</h3>
               <span class="entry-form__label">
@@ -223,8 +195,39 @@ onMounted(async () => {
               </template>
             </section>
 
-            <section class="form-section form-section--appearance">
-              <div class="appearance-field">
+            <!-- 右列：紧凑字段纵向排布，备注自动伸展补齐高度 -->
+            <div class="entry-form__side">
+              <section class="form-section">
+                <h3 class="form-section__title">{{ t('config.sectionBasic') }}</h3>
+                <input
+                  v-model="editing.name"
+                  class="entry-form__input entry-form__input--hero"
+                  type="text"
+                  :placeholder="t('config.namePlaceholder')"
+                  maxlength="30"
+                />
+                <div class="entry-form__options">
+                  <button
+                    type="button"
+                    class="entry-form__option"
+                    :class="{ 'entry-form__option--active': editing.entryType === 'countdown' }"
+                    @click="editing.entryType = 'countdown'"
+                  >
+                    {{ t('config.typeCountdown') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="entry-form__option"
+                    :class="{ 'entry-form__option--active': editing.entryType === 'elapsed' }"
+                    @click="editing.entryType = 'elapsed'"
+                  >
+                    {{ t('config.typeElapsed') }}
+                  </button>
+                </div>
+              </section>
+
+              <section class="form-section form-section--appearance">
+                <h3 class="form-section__title">{{ t('config.sectionAppearance') }}</h3>
                 <span class="entry-form__label">{{ t('config.fieldColor') }}</span>
                 <div class="entry-form__colors">
                   <button
@@ -238,25 +241,19 @@ onMounted(async () => {
                     @click="editing.color = color"
                   />
                 </div>
-              </div>
-              <div class="appearance-field">
-                <span class="entry-form__label">{{ t('config.fieldPinned') }}</span>
                 <label class="entry-form__toggle">
                   <input v-model="editing.pinned" type="checkbox" />
-                  <span>{{ editing.pinned ? t('config.pinnedOn') : t('config.pinnedOff') }}</span>
+                  <span>{{ t('config.fieldPinned') }}（{{ editing.pinned ? t('config.pinnedOn') : t('config.pinnedOff') }}）</span>
                 </label>
-              </div>
-              <div class="appearance-field appearance-field--grow">
                 <span class="entry-form__label">{{ t('config.fieldNote') }}</span>
                 <textarea
                   v-model="editing.note"
                   class="entry-form__input entry-form__note"
-                  rows="2"
                   :placeholder="t('config.notePlaceholder')"
                   maxlength="100"
                 />
-              </div>
-            </section>
+              </section>
+            </div>
           </div>
 
           <div class="entry-form__footer">
@@ -562,47 +559,39 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
 }
 
-/* 双栏网格：预览通栏 → 基本信息/时间并排 → 外观通栏 */
+/* 双栏网格：预览通栏 → 左侧日历锚点 + 右侧紧凑字段列 */
 .entry-form__body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 300px 1fr;
   grid-template-areas:
     'preview preview'
-    'basic time'
-    'appearance appearance';
+    'time side';
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .entry-preview {
   grid-area: preview;
 }
 
-.form-section--basic {
-  grid-area: basic;
-}
-
 .form-section--time {
   grid-area: time;
 }
 
-.form-section--appearance {
-  grid-area: appearance;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 24px;
-}
-
-.appearance-field {
+.entry-form__side {
+  grid-area: side;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.appearance-field--grow {
+.form-section--appearance {
   flex: 1;
-  min-width: 220px;
+}
+
+.form-section--appearance .entry-form__note {
+  flex: 1;
+  min-height: 56px;
 }
 
 .form-section {
