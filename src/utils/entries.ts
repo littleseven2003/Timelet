@@ -12,33 +12,51 @@ export function startOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+// 条目的生效时间点：带时刻为当日具体时分，纯日期为当日零点
+export function entryDeadline(entry: Entry): Date {
+  const base = parseLocalDate(entry.date);
+  if (entry.time) {
+    const [hour, minute] = entry.time.split(':').map(Number);
+    base.setHours(hour!, minute!, 0, 0);
+  }
+  return base;
+}
+
 // 两个自然日相差的天数（本地时区，按日历日而非 24 小时制）
 export function daysBetween(from: Date, toIsoDate: string): number {
   const target = parseLocalDate(toIsoDate);
   return Math.round((target.getTime() - from.getTime()) / 86_400_000);
 }
 
-// 条目展示天数：倒计时为剩余天数（负数表示已过期），正计时为已过天数
+// 条目展示天数：倒计时为剩余天数（负数表示已过期），正计时为已过天数；仅适用于纯日期条目
 export function entryDays(entry: Entry, today: Date = startOfToday()): number {
   const diff = daysBetween(today, entry.date);
   return entry.entryType === 'elapsed' ? -diff : diff;
 }
 
-// 分组序：0 置顶、1 未过期倒计时、2 正计时、3 已过期倒计时
-function groupOf(entry: Entry): number {
-  const days = entryDays(entry);
+// 分组序：0 置顶、1 未到期倒计时、2 正计时、3 已过期倒计时；带时刻条目以当前时刻判定
+function groupOf(entry: Entry, now: number): number {
   if (entry.pinned) return 0;
-  if (entry.entryType === 'countdown') return days >= 0 ? 1 : 3;
+  if (entry.entryType === 'countdown') {
+    return entryDeadline(entry).getTime() >= now ? 1 : 3;
+  }
   return 2;
 }
 
-// 面板与配置列表共用排序：置顶优先 → 未过期倒计时按剩余升序 → 正计时按起始日期升序 → 已过期倒计时置底（最近过期在前）
+// 排序：置顶优先 → 未到期倒计时按截止升序 → 正计时按起始升序 → 已过期倒计时置底（最近过期在前）；
+// 同组内旧数据（无手动顺序）按时间规则排
 export function sortEntries(entries: Entry[]): Entry[] {
+  const now = Date.now();
   return [...entries].sort((a, b) => {
-    const groupDiff = groupOf(a) - groupOf(b);
+    const groupDiff = groupOf(a, now) - groupOf(b, now);
     if (groupDiff !== 0) return groupDiff;
-    if (groupOf(a) === 0) return 0;
-    const dateDiff = a.date.localeCompare(b.date);
-    return groupOf(a) === 3 ? -dateDiff : dateDiff;
+    if (groupOf(a, now) === 0) return orderValue(a) - orderValue(b);
+    const timeDiff = entryDeadline(a).getTime() - entryDeadline(b).getTime();
+    return groupOf(a, now) === 3 ? -timeDiff : timeDiff;
   });
+}
+
+// 手动顺序值（M3-2 拖拽排序启用），无手动顺序的条目排在其组内末尾
+function orderValue(entry: Entry): number {
+  return entry.sortIndex ?? Number.MAX_SAFE_INTEGER;
 }

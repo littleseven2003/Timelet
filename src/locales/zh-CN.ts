@@ -10,6 +10,18 @@ export default {
     today: '就是今天',
     expired: '已过期 {days} 天',
     elapsed: '已过 {days} 天',
+    soon: '即将到达',
+    expiredOnly: '已过期',
+    left: {
+      daysHours: '剩余 {d} 天 {h} 小时',
+      hoursMinutes: '剩余 {h} 小时 {m} 分',
+      minutes: '剩余 {m} 分钟',
+    },
+    ago: {
+      daysHours: '已过期 {d} 天 {h} 小时',
+      hoursMinutes: '已过期 {h} 小时 {m} 分',
+      minutes: '已过期 {m} 分钟',
+    },
   },
   config: {
     nav: {
@@ -31,6 +43,7 @@ export default {
     startDate: '起始日期',
     fieldColor: '颜色',
     fieldPinned: '置顶显示',
+    includeTime: '包含时刻',
     pinnedTag: '置顶',
     save: '保存',
     cancel: '取消',

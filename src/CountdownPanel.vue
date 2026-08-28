@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Entry } from './types/entry';
 import { useEntries } from './composables/useEntries';
-import { entryDays, sortEntries } from './utils/entries';
+import { entryDays, entryDeadline, sortEntries } from './utils/entries';
 
 const { t, locale } = useI18n();
 const { entries, loaded, reload, ensureChangeListener } = useEntries();
+
+// 分钟级时钟：带时刻条目的展示与排序依赖当前时间，需定时失效缓存
+const now = ref(Date.now());
+let ticker: ReturnType<typeof setInterval> | undefined;
 
 // 当天日期与星期，跟随 i18n 语言展示
 const today = computed(() => {
@@ -21,10 +25,14 @@ const today = computed(() => {
   };
 });
 
-const sorted = computed(() => sortEntries(entries.value));
+const sorted = computed(() => {
+  void now.value;
+  return sortEntries(entries.value);
+});
 
-// 天数展示文案：倒计时（今天/剩余/已过期）与正计时
+// 天数/时刻展示文案：倒计时（今天/剩余/已过期）与正计时
 function daysText(entry: Entry): string {
+  if (entry.time) return timedText(entry, now.value);
   const days = entryDays(entry);
   if (entry.entryType === 'elapsed') return t('panel.elapsed', { days });
   if (days === 0) return t('panel.today');
@@ -32,10 +40,36 @@ function daysText(entry: Entry): string {
   return t('panel.daysLeft', { days });
 }
 
+// 带时刻条目按精确间隔展示：天+小时 → 小时+分 → 分钟
+function timedText(entry: Entry, nowMs: number): string {
+  const diffMinutes = Math.round((entryDeadline(entry).getTime() - nowMs) / 60_000);
+  const expired = diffMinutes < 0;
+  const abs = Math.abs(diffMinutes);
+  const days = Math.floor(abs / 1440);
+  const hours = Math.floor((abs % 1440) / 60);
+  const minutes = abs % 60;
+
+  if (days > 0) {
+    return t(expired ? 'panel.ago.daysHours' : 'panel.left.daysHours', { d: days, h: hours });
+  }
+  if (hours > 0) {
+    return t(expired ? 'panel.ago.hoursMinutes' : 'panel.left.hoursMinutes', { h: hours, m: minutes });
+  }
+  if (minutes > 0) {
+    return t(expired ? 'panel.ago.minutes' : 'panel.left.minutes', { m: minutes });
+  }
+  return expired ? t('panel.expiredOnly') : t('panel.soon');
+}
+
 onMounted(() => {
   reload();
   ensureChangeListener();
+  ticker = setInterval(() => {
+    now.value = Date.now();
+  }, 30_000);
 });
+
+onUnmounted(() => clearInterval(ticker));
 </script>
 
 <template>

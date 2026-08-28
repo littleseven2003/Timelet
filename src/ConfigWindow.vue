@@ -5,6 +5,7 @@ import type { Entry } from './types/entry';
 import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
 import { sortEntries } from './utils/entries';
+import DateTimePicker from './components/DateTimePicker.vue';
 
 type NavKey = 'entries' | 'settings' | 'about';
 
@@ -37,6 +38,12 @@ function openEdit(entry: Entry) {
 function cancelEdit() {
   editing.value = null;
   deletingId.value = null;
+}
+
+// 开关时刻精度：开启时给默认时刻，关闭时移除
+function toggleTime(enabled: boolean) {
+  if (!editing.value) return;
+  editing.value.time = enabled ? (editing.value.time ?? '09:00') : undefined;
 }
 
 async function submit() {
@@ -110,12 +117,26 @@ async function confirmRemove() {
             </div>
           </div>
 
-          <label class="entry-form__field">
+          <div class="entry-form__field">
             <span class="entry-form__label">
               {{ editing.entryType === 'countdown' ? t('config.targetDate') : t('config.startDate') }}
             </span>
-            <input v-model="editing.date" class="entry-form__input" type="date" />
-          </label>
+            <DateTimePicker
+              :date="editing.date"
+              :time="editing.time ?? null"
+              :with-time="!!editing.time"
+              @update:date="editing.date = $event"
+              @update:time="editing.time = $event"
+            />
+            <label class="entry-form__include-time">
+              <input
+                type="checkbox"
+                :checked="!!editing.time"
+                @change="toggleTime(($event.target as HTMLInputElement).checked)"
+              />
+              <span>{{ t('config.includeTime') }}</span>
+            </label>
+          </div>
 
           <div class="entry-form__field">
             <span class="entry-form__label">{{ t('config.fieldColor') }}</span>
@@ -399,6 +420,15 @@ async function confirmRemove() {
 .entry-form__label {
   font-size: 13px;
   opacity: 0.7;
+}
+
+.entry-form__include-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-top: 8px;
+  cursor: pointer;
 }
 
 .entry-form__input {

@@ -11,6 +11,18 @@ export default {
     today: 'Today',
     expired: 'Expired {days} days ago',
     elapsed: '{days} days passed',
+    soon: 'Arriving soon',
+    expiredOnly: 'Expired',
+    left: {
+      daysHours: '{d} d {h} h left',
+      hoursMinutes: '{h} h {m} m left',
+      minutes: '{m} min left',
+    },
+    ago: {
+      daysHours: 'Expired {d} d {h} h ago',
+      hoursMinutes: 'Expired {h} h {m} m ago',
+      minutes: 'Expired {m} min ago',
+    },
   },
   config: {
     nav: {
@@ -32,6 +44,7 @@ export default {
     startDate: 'Start date',
     fieldColor: 'Color',
     fieldPinned: 'Pinned',
+    includeTime: 'Include time',
     pinnedTag: 'Pinned',
     save: 'Save',
     cancel: 'Cancel',

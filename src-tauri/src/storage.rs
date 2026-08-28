@@ -18,6 +18,8 @@ pub struct Entry {
     pub entry_type: String,
     // ISO 日期（YYYY-MM-DD）
     pub date: String,
+    // 可选时刻（HH:mm），缺失表示纯日期条目
+    pub time: Option<String>,
     pub color: String,
     pub pinned: bool,
     pub created_at: String,
