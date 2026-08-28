@@ -1,0 +1,26 @@
+export type EntryType = 'countdown' | 'elapsed';
+
+export interface Entry {
+  id: string;
+  name: string;
+  /** countdown：距目标日；elapsed：自起始日已过 */
+  entryType: EntryType;
+  /** ISO 日期（YYYY-MM-DD） */
+  date: string;
+  color: string;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 预设色板（8 色），新增颜色需同步设计文档 */
+export const ENTRY_COLORS = [
+  '#e5484d',
+  '#f76b15',
+  '#ffb224',
+  '#30a46c',
+  '#12a594',
+  '#0091ff',
+  '#6e56cf',
+  '#d6409f',
+] as const;

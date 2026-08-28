@@ -23,8 +23,9 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     app.manage(PanelBlurState::default());
     watch_panel_blur(app);
 
+    let open_config_item = MenuItem::with_id(app, "open-config", "打开配置", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出 Timelet", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&quit])?;
+    let menu = Menu::with_items(app, &[&open_config_item, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .icon(
@@ -36,7 +37,9 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {
-            if event.id() == "quit" {
+            if event.id() == "open-config" {
+                open_config(app);
+            } else if event.id() == "quit" {
                 app.exit(0);
             }
         })
@@ -61,6 +64,30 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
 
     builder.build(app)?;
     Ok(())
+}
+
+// 打开（或聚焦已存在的）配置窗口；窗口按需创建，避免启动即建
+fn open_config(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("config") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    }
+
+    let result = tauri::webview::WebviewWindowBuilder::new(
+        app,
+        "config",
+        tauri::WebviewUrl::App("index.html".into()),
+    )
+    .title("Timelet 设置")
+    .inner_size(640.0, 480.0)
+    .min_inner_size(560.0, 420.0)
+    .build();
+
+    if let Err(err) = result {
+        eprintln!("打开配置窗口失败: {err}");
+    }
 }
 
 // 左键点击托盘图标时切换面板显隐，并在显示前按图标位置重新定位
