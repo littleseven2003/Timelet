@@ -10,11 +10,20 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Timelet（时屿）",
-        "width": 800,
-        "height": 600
+        "label": "panel",
+        "title": "Timelet",
+        "url": "index.html?window=panel",
+        "width": 320,
+        "height": 420,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "resizable": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true
       }
     ],
     "security": {

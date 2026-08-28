@@ -4,4 +4,8 @@ export default {
     name: 'Timelet',
     tagline: 'Keep important days at hand',
   },
+  panel: {
+    emptyTitle: 'No countdown yet',
+    emptyHint: 'Open the settings window to add your first entry',
+  },
 } as const;
