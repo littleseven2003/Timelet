@@ -67,6 +67,12 @@ export default {
     pinnedOn: 'Pinned',
     pinnedOff: 'Not pinned',
     includeTime: 'Include time',
+    fieldRepeat: 'Repeat',
+    repeat: {
+      none: 'Never',
+      daily: 'Daily',
+      workday: 'Workdays',
+    },
     fieldUnit: 'Display unit',
     unit: {
       day: 'Day',

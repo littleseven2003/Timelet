@@ -29,6 +29,35 @@ export function entryDeadline(entry: Entry): Date {
   return base;
 }
 
+function isWorkday(date: Date): boolean {
+  const weekday = date.getDay();
+  return weekday >= 1 && weekday <= 5;
+}
+
+function atTime(day: Date, hour: number, minute: number): Date {
+  const result = new Date(day);
+  result.setHours(hour, minute, 0, 0);
+  return result;
+}
+
+// 循环条目的下一次发生时间（每天/每个工作日），单次条目返回固定截止
+export function effectiveDeadline(entry: Entry, nowMs: number): Date {
+  if (!entry.time || !entry.repeat) return entryDeadline(entry);
+
+  const [hour, minute] = entry.time.split(':').map(Number);
+  let candidate = atTime(new Date(nowMs), hour!, minute!);
+  if (entry.repeat === 'workday') {
+    while (!isWorkday(candidate) || candidate.getTime() <= nowMs) {
+      candidate = atTime(new Date(candidate.getTime() + 86_400_000), hour!, minute!);
+    }
+    return candidate;
+  }
+  if (candidate.getTime() <= nowMs) {
+    candidate = atTime(new Date(candidate.getTime() + 86_400_000), hour!, minute!);
+  }
+  return candidate;
+}
+
 // 两个自然日相差的天数（本地时区，按日历日而非 24 小时制）
 export function daysBetween(from: Date, toIsoDate: string): number {
   const target = parseLocalDate(toIsoDate);
@@ -55,10 +84,11 @@ export function entryUnitValue(entry: Entry, unit: DisplayUnit): number | null {
   return unit === 'month' ? months : Math.trunc(months / 12);
 }
 
-// 是否为已过期的倒计时条目（带时刻按时刻判定，纯日期按自然日判定）
+// 是否为已过期的倒计时条目（带时刻按时刻判定，纯日期按自然日判定；循环条目永不过期）
 export function isExpiredCountdown(entry: Entry, nowMs: number = Date.now()): boolean {
   if (entry.entryType !== 'countdown') return false;
-  return entryDeadline(entry).getTime() < nowMs;
+  if (entry.repeat) return false;
+  return effectiveDeadline(entry, nowMs).getTime() < nowMs;
 }
 
 // 展示文案翻译函数的最小形状（兼容 vue-i18n 的 t）
@@ -98,9 +128,10 @@ export function formatEntryText(entry: Entry, nowMs: number, t: Translate): stri
   return t('panel.expired', { days: -days });
 }
 
-// 带时刻条目按精确间隔展示：天+小时 → 小时+分 → 分钟
+// 带时刻条目按精确间隔展示（循环条目对齐下一次发生）：天+小时 → 小时+分 → 分钟
 function timedText(entry: Entry, nowMs: number, t: Translate): string {
-  const diffMinutes = Math.round((entryDeadline(entry).getTime() - nowMs) / 60_000);
+  const deadline = effectiveDeadline(entry, nowMs).getTime();
+  const diffMinutes = Math.round((deadline - nowMs) / 60_000);
   const expired = diffMinutes < 0;
   const abs = Math.abs(diffMinutes);
   const days = Math.floor(abs / 1440);
@@ -123,10 +154,10 @@ function timedText(entry: Entry, nowMs: number, t: Translate): string {
 }
 
 // 分组序：0 置顶、1 未到期倒计时、2 正计时、3 已过期倒计时；带时刻条目以当前时刻判定
-function groupOf(entry: Entry, now: number): number {
+function groupOf(entry: Entry, nowMs: number): number {
   if (entry.pinned) return 0;
   if (entry.entryType === 'countdown') {
-    return entryDeadline(entry).getTime() >= now ? 1 : 3;
+    return effectiveDeadline(entry, nowMs).getTime() >= nowMs ? 1 : 3;
   }
   return 2;
 }
@@ -146,7 +177,7 @@ export function sortEntries(entries: Entry[]): Entry[] {
   return [...entries].sort((a, b) => {
     const groupDiff = groupOf(a, now) - groupOf(b, now);
     if (groupDiff !== 0) return groupDiff;
-    const timeDiff = entryDeadline(a).getTime() - entryDeadline(b).getTime();
+    const timeDiff = effectiveDeadline(a, now).getTime() - effectiveDeadline(b, now).getTime();
     return groupOf(a, now) === 3 ? -timeDiff : timeDiff;
   });
 }

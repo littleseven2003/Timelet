@@ -66,6 +66,12 @@ export default {
     pinnedOn: '已置顶',
     pinnedOff: '未置顶',
     includeTime: '包含时刻',
+    fieldRepeat: '重复',
+    repeat: {
+      none: '不重复',
+      daily: '每天',
+      workday: '工作日',
+    },
     fieldUnit: '显示单位',
     unit: {
       day: '天',

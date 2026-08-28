@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use serde::Serialize;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Position, Size, WebviewWindow, WindowEvent};
@@ -83,43 +84,86 @@ fn watch_panel_menu_events(app: &AppHandle) {
     });
 }
 
-// 待编辑条目 id：面板"编辑详情"先于配置窗口就绪时暂存，窗口挂载后取走
+// 待执行动作：面板"编辑详情/新增条目"先于配置窗口就绪时暂存，窗口挂载后取走
+#[derive(Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum EntryAction {
+    Create,
+    Edit { id: String },
+}
+
 #[derive(Default)]
-pub struct PendingEditEntry(Mutex<Option<String>>);
+pub struct PendingEntryAction(Mutex<Option<EntryAction>>);
 
 // 打开（或聚焦已存在的）主界面；带 entry_id 时进入该条目的编辑态
-// 窗口已存在则直接发事件；新创建则暂存 id 供挂载后取用
 pub fn open_main(app: &AppHandle, entry_id: Option<String>) {
+    open_main_with(app, entry_id.map(|id| EntryAction::Edit { id }));
+}
+
+fn open_main_with(app: &AppHandle, action: Option<EntryAction>) {
     use tauri::Emitter;
 
     if let Some(window) = app.get_webview_window("config") {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        if let Some(id) = entry_id {
-            let _ = app.emit("open-entry-editor", id);
+        if let Some(action) = action {
+            let _ = app.emit("open-entry-action", action);
         }
         return;
     }
 
-    if let Some(id) = &entry_id {
-        let pending = app.state::<PendingEditEntry>();
-        *pending.0.lock().unwrap() = Some(id.clone());
+    if let Some(action) = action {
+        let pending = app.state::<PendingEntryAction>();
+        *pending.0.lock().unwrap() = Some(action);
     }
 
-    let result = tauri::webview::WebviewWindowBuilder::new(
+    let mut builder = tauri::webview::WebviewWindowBuilder::new(
         app,
         "config",
         tauri::WebviewUrl::App("index.html".into()),
     )
     .title("Timelet 设置")
-    .inner_size(780.0, 560.0)
-    .min_inner_size(700.0, 520.0)
-    .build();
+    .min_inner_size(700.0, 520.0);
 
-    if let Err(err) = result {
-        eprintln!("打开主界面失败: {err}");
+    // 恢复用户上次调整过的窗口大小与位置
+    if let Some(bounds) = crate::settings::load_window_bounds(app) {
+        builder = builder
+            .position(bounds.x, bounds.y)
+            .inner_size(bounds.width, bounds.height);
+    } else {
+        builder = builder.inner_size(780.0, 560.0);
     }
+
+    match builder.build() {
+        Ok(window) => watch_config_close(app, &window),
+        Err(err) => eprintln!("打开主界面失败: {err}"),
+    }
+}
+
+// 主界面关闭时记录窗口大小与位置，供下次打开恢复
+fn watch_config_close(app: &AppHandle, window: &tauri::WebviewWindow) {
+    let handle = app.clone();
+    let closer = window.clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { .. } = event {
+            if let Err(err) = crate::settings::save_window_bounds(&handle, &closer) {
+                eprintln!("保存窗口状态失败: {err}");
+            }
+        }
+    });
+}
+
+// 面板"新增条目"直达主界面的新建表单
+#[tauri::command]
+pub fn open_main_create(app: AppHandle) {
+    open_main_with(&app, Some(EntryAction::Create));
+}
+
+// 面板缩略详情"编辑"直达该条目的编辑表单
+#[tauri::command]
+pub fn open_entry_editor(app: AppHandle, id: String) {
+    open_main(&app, Some(id));
 }
 
 // 面板右键菜单：条目上为"编辑详情 / 打开主界面"，空白处为"打开主界面"
@@ -149,9 +193,9 @@ pub fn show_panel_menu(
     menu.popup(window).map_err(|e| e.to_string())
 }
 
-// 配置窗口挂载后取走暂存的待编辑条目 id
+// 配置窗口挂载后取走暂存的待执行动作
 #[tauri::command]
-pub fn take_pending_edit(state: tauri::State<'_, PendingEditEntry>) -> Option<String> {
+pub fn take_pending_action(state: tauri::State<'_, PendingEntryAction>) -> Option<EntryAction> {
     state.0.lock().unwrap().take()
 }
 

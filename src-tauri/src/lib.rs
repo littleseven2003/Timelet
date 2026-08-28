@@ -14,7 +14,7 @@ pub fn run() {
             None,
         ))
         .setup(|app| {
-            app.manage(tray::PendingEditEntry::default());
+            app.manage(tray::PendingEntryAction::default());
             settings::init(app.handle())?;
             storage::init(app.handle())?;
             tray::init(app.handle())?;
@@ -28,7 +28,9 @@ pub fn run() {
             settings::settings_get,
             settings::settings_set,
             tray::show_panel_menu,
-            tray::take_pending_edit
+            tray::take_pending_action,
+            tray::open_main_create,
+            tray::open_entry_editor
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -3,6 +3,9 @@ export type EntryType = 'countdown' | 'elapsed';
 /** 条目天数展示单位 */
 export type DisplayUnit = 'day' | 'week' | 'month' | 'year';
 
+/** 循环规则（仅带时刻的条目生效） */
+export type RepeatRule = 'daily' | 'workday';
+
 export interface Entry {
   id: string;
   name: string;
@@ -12,6 +15,8 @@ export interface Entry {
   date: string;
   /** 可选时刻（HH:mm），缺失表示纯日期条目 */
   time?: string;
+  /** 循环规则，缺失表示单次 */
+  repeat?: RepeatRule;
   /** 展示单位，缺失按天 */
   displayUnit?: DisplayUnit;
   /** 选填备注，面板悬停时展示 */

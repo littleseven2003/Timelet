@@ -20,6 +20,8 @@ pub struct Entry {
     pub date: String,
     // 可选时刻（HH:mm），缺失表示纯日期条目
     pub time: Option<String>,
+    // 循环规则（daily 每天 / workday 工作日），仅带时刻的条目生效
+    pub repeat: Option<String>,
     // 展示单位（day/week/month/year），缺失按天
     pub display_unit: Option<String>,
     // 选填备注，面板悬停时展示

@@ -80,10 +80,11 @@ function cancelEdit() {
   deleteTarget.value = null;
 }
 
-// 开关时刻精度：开启时给默认时刻，关闭时移除
+// 开关时刻精度：开启时给默认时刻，关闭时移除并清空循环
 function toggleTime(enabled: boolean) {
   if (!editing.value) return;
   editing.value.time = enabled ? (editing.value.time ?? '09:00') : undefined;
+  if (!enabled) editing.value.repeat = undefined;
 }
 
 async function submit() {
@@ -177,6 +178,22 @@ onMounted(async () => {
                 />
                 <span>{{ t('config.includeTime') }}</span>
               </label>
+
+              <template v-if="editing.time">
+                <span class="entry-form__label">{{ t('config.fieldRepeat') }}</span>
+                <div class="entry-form__options">
+                  <button
+                    v-for="rule in (['none', 'daily', 'workday'] as const)"
+                    :key="rule"
+                    type="button"
+                    class="entry-form__option"
+                    :class="{ 'entry-form__option--active': (editing.repeat ?? 'none') === rule }"
+                    @click="editing.repeat = rule === 'none' ? undefined : rule"
+                  >
+                    {{ t(`config.repeat.${rule}`) }}
+                  </button>
+                </div>
+              </template>
 
               <template v-if="!editing.time">
                 <span class="entry-form__label">{{ t('config.fieldUnit') }}</span>
