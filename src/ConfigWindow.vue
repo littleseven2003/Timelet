@@ -400,7 +400,9 @@ onMounted(async () => {
 
 .config__main {
   flex: 1;
-  padding: 16px 20px;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 20px 24px;
   overflow-y: auto;
 }
 
@@ -431,10 +433,10 @@ onMounted(async () => {
 .entry-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px 14px;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
+  border-radius: 10px;
   background-color: #fff;
   cursor: grab;
 }
