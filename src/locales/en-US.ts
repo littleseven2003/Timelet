@@ -52,4 +52,11 @@ export default {
     delete: 'Delete',
     confirmDelete: 'Confirm',
   },
+  settings: {
+    launchAtLogin: 'Launch at login',
+    launchAtLoginDesc: 'Start Timelet automatically when you log in',
+    launchError: 'Failed to update launch setting, please retry',
+    showExpired: 'Show expired entries',
+    showExpiredDesc: 'Hide expired countdown entries from the panel when off',
+  },
 } as const;

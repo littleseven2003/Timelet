@@ -3,10 +3,14 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Entry } from './types/entry';
 import { useEntries } from './composables/useEntries';
-import { entryDays, entryDeadline, sortEntries } from './utils/entries';
+import { getSettings } from './api/settings';
+import { entryDays, entryDeadline, isExpiredCountdown, sortEntries } from './utils/entries';
 
 const { t, locale } = useI18n();
 const { entries, loaded, reload, ensureChangeListener } = useEntries();
+
+// 「显示已过期条目」设置，默认显示
+const showExpired = ref(true);
 
 // 分钟级时钟：带时刻条目的展示与排序依赖当前时间，需定时失效缓存
 const now = ref(Date.now());
@@ -27,7 +31,10 @@ const today = computed(() => {
 
 const sorted = computed(() => {
   void now.value;
-  return sortEntries(entries.value);
+  const visible = showExpired.value
+    ? entries.value
+    : entries.value.filter((entry) => !isExpiredCountdown(entry, now.value));
+  return sortEntries(visible);
 });
 
 // 天数/时刻展示文案：倒计时（今天/剩余/已过期）与正计时
@@ -61,9 +68,14 @@ function timedText(entry: Entry, nowMs: number): string {
   return expired ? t('panel.expiredOnly') : t('panel.soon');
 }
 
-onMounted(() => {
+onMounted(async () => {
   reload();
   ensureChangeListener();
+  try {
+    showExpired.value = (await getSettings()).showExpired;
+  } catch {
+    // 读取失败时保持默认显示
+  }
   ticker = setInterval(() => {
     now.value = Date.now();
   }, 30_000);

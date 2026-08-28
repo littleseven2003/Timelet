@@ -51,4 +51,11 @@ export default {
     delete: '删除',
     confirmDelete: '确认删除',
   },
+  settings: {
+    launchAtLogin: '开机自启',
+    launchAtLoginDesc: '登录系统时自动启动 Timelet',
+    launchError: '开机自启设置失败，请重试',
+    showExpired: '显示已过期条目',
+    showExpiredDesc: '关闭后，已过期的倒计时条目不再出现在面板中',
+  },
 } as const;

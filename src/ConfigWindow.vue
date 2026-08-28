@@ -6,6 +6,7 @@ import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
 import { sortEntries } from './utils/entries';
 import DateTimePicker from './components/DateTimePicker.vue';
+import SettingsSection from './components/SettingsSection.vue';
 
 type NavKey = 'entries' | 'settings' | 'about';
 
@@ -265,10 +266,9 @@ async function confirmRemove() {
         </template>
       </template>
 
-      <!-- 通用设置（M3 实装） -->
+      <!-- 通用设置 -->
       <template v-else-if="activeNav === 'settings'">
-        <h2 class="config__placeholder-title">{{ t('config.nav.settings') }}</h2>
-        <p class="config__placeholder">{{ t('config.settingsPlaceholder') }}</p>
+        <SettingsSection />
       </template>
 
       <!-- 关于（M5 实装） -->

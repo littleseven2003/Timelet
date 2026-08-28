@@ -34,6 +34,12 @@ export function entryDays(entry: Entry, today: Date = startOfToday()): number {
   return entry.entryType === 'elapsed' ? -diff : diff;
 }
 
+// 是否为已过期的倒计时条目（带时刻按时刻判定，纯日期按自然日判定）
+export function isExpiredCountdown(entry: Entry, nowMs: number = Date.now()): boolean {
+  if (entry.entryType !== 'countdown') return false;
+  return entryDeadline(entry).getTime() < nowMs;
+}
+
 // 分组序：0 置顶、1 未到期倒计时、2 正计时、3 已过期倒计时；带时刻条目以当前时刻判定
 function groupOf(entry: Entry, now: number): number {
   if (entry.pinned) return 0;

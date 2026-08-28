@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Capability for the panel window",
   "windows": ["panel", "config"],
-  "permissions": ["core:default", "opener:default"]
+  "permissions": ["core:default", "opener:default", "autostart:default"]
 }
