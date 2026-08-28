@@ -82,6 +82,8 @@ export default {
     edit: 'Edit',
     delete: 'Delete',
     confirmDelete: 'Confirm',
+    deleteConfirmTitle: 'Delete Entry',
+    deleteConfirmText: 'Delete "{name}"? This cannot be undone.',
   },
   settings: {
     launchAtLogin: 'Launch at login',

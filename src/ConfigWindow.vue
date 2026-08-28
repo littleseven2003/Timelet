@@ -19,8 +19,8 @@ const { entries, loaded, reload, upsert, remove, reorder } = useEntries();
 // 编辑态：editing 非空时内容区切换为表单
 const editing = ref<Entry | null>(null);
 const isNew = ref(false);
-// 两步删除确认：记录待确认删除的条目 id
-const deletingId = ref<string | null>(null);
+// 删除确认弹窗：记录待删除条目
+const deleteTarget = ref<Entry | null>(null);
 
 const sorted = computed(() => sortEntries(entries.value));
 const canSave = computed(() => !!editing.value?.name && !!editing.value?.date);
@@ -72,12 +72,12 @@ function openCreate() {
 function openEdit(entry: Entry) {
   isNew.value = false;
   editing.value = { ...entry };
-  deletingId.value = null;
+  deleteTarget.value = null;
 }
 
 function cancelEdit() {
   editing.value = null;
-  deletingId.value = null;
+  deleteTarget.value = null;
 }
 
 // 开关时刻精度：开启时给默认时刻，关闭时移除
@@ -94,9 +94,9 @@ async function submit() {
 }
 
 async function confirmRemove() {
-  if (!deletingId.value) return;
-  const id = deletingId.value;
-  deletingId.value = null;
+  if (!deleteTarget.value) return;
+  const id = deleteTarget.value.id;
+  deleteTarget.value = null;
   await remove(id);
   // 从编辑表单内删除时同步关闭表单
   if (editing.value?.id === id) cancelEdit();
@@ -261,9 +261,9 @@ onMounted(async () => {
               v-if="!isNew"
               class="btn btn--danger"
               type="button"
-              @click="deletingId === editing.id ? confirmRemove() : (deletingId = editing.id)"
+              @click="deleteTarget = editing"
             >
-              {{ deletingId === editing.id ? t('config.confirmDelete') : t('config.delete') }}
+              {{ t('config.delete') }}
             </button>
             <span class="entry-form__spacer" />
             <button class="btn" type="button" @click="cancelEdit">
@@ -317,20 +317,11 @@ onMounted(async () => {
                   {{ t('config.edit') }}
                 </button>
                 <button
-                  v-if="deletingId !== entry.id"
                   class="btn btn--small btn--danger"
                   type="button"
-                  @click="deletingId = entry.id"
+                  @click="deleteTarget = entry"
                 >
                   {{ t('config.delete') }}
-                </button>
-                <button
-                  v-else
-                  class="btn btn--small btn--danger"
-                  type="button"
-                  @click="confirmRemove"
-                >
-                  {{ t('config.confirmDelete') }}
                 </button>
               </div>
             </li>
@@ -349,6 +340,22 @@ onMounted(async () => {
         <p class="config__placeholder">{{ t('config.aboutPlaceholder') }}</p>
       </template>
     </main>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
+      <div class="modal">
+        <h3 class="modal__title">{{ t('config.deleteConfirmTitle') }}</h3>
+        <p class="modal__text">{{ t('config.deleteConfirmText', { name: deleteTarget.name }) }}</p>
+        <div class="modal__actions">
+          <button class="btn" type="button" @click="deleteTarget = null">
+            {{ t('config.cancel') }}
+          </button>
+          <button class="btn btn--danger-solid" type="button" @click="confirmRemove">
+            {{ t('config.delete') }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -511,6 +518,55 @@ onMounted(async () => {
 
 .btn--danger {
   color: #d33;
+}
+
+.btn--danger-solid {
+  background-color: #d64545;
+  border-color: #d64545;
+  color: #fff;
+}
+
+.btn--danger-solid:hover {
+  background-color: #e05555;
+  border-color: #e05555;
+}
+
+/* 删除确认弹窗 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  width: 320px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background-color: #fff;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal__title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.modal__text {
+  font-size: 13px;
+  opacity: 0.7;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .btn--small {
@@ -757,6 +813,16 @@ onMounted(async () => {
 
   .entry-form__footer {
     border-top-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .modal {
+    background-color: #333;
+  }
+
+  .btn--danger-solid {
+    background-color: #d64545;
+    border-color: #d64545;
+    color: #fff;
   }
 
   .btn--primary {

@@ -81,6 +81,8 @@ export default {
     edit: '编辑',
     delete: '删除',
     confirmDelete: '确认删除',
+    deleteConfirmTitle: '删除条目',
+    deleteConfirmText: '确定删除「{name}」吗？此操作无法撤销。',
   },
   settings: {
     launchAtLogin: '开机自启',
