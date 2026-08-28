@@ -3,4 +3,9 @@ html,
 body {
   margin: 0;
   padding: 0;
+  /* 无边框窗口未设字体时 WebView 回退为衬线体，这里统一为系统字体栈 */
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  background-color: transparent;
 }

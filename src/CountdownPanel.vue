@@ -39,6 +39,9 @@ const today = computed(() => {
   flex-direction: column;
   background-color: #f6f6f6;
   color: #1a1a1a;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .panel__header {
@@ -84,6 +87,7 @@ const today = computed(() => {
   .panel {
     background-color: #2b2b2b;
     color: #f0f0f0;
+    border-color: rgba(255, 255, 255, 0.14);
   }
 
   .panel__header {
