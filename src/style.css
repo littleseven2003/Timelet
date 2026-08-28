@@ -1,4 +1,10 @@
 /* 全局重置：窗口内页面不留默认边距，避免面板出现多余滚动条 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body {
   margin: 0;
