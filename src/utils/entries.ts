@@ -43,20 +43,27 @@ function groupOf(entry: Entry, now: number): number {
   return 2;
 }
 
-// 排序：置顶优先 → 未到期倒计时按截止升序 → 正计时按起始升序 → 已过期倒计时置底（最近过期在前）；
-// 同组内旧数据（无手动顺序）按时间规则排
+// 排序：任一条目存在手动顺序时，整体按"置顶优先 + 手动顺序"；否则按自动规则：
+// 未到期倒计时按截止升序 → 正计时按起始升序 → 已过期倒计时置底（最近过期在前）
 export function sortEntries(entries: Entry[]): Entry[] {
+  const manual = entries.some((entry) => entry.sortIndex != null);
+  if (manual) {
+    return [...entries].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      return orderValue(a) - orderValue(b);
+    });
+  }
+
   const now = Date.now();
   return [...entries].sort((a, b) => {
     const groupDiff = groupOf(a, now) - groupOf(b, now);
     if (groupDiff !== 0) return groupDiff;
-    if (groupOf(a, now) === 0) return orderValue(a) - orderValue(b);
     const timeDiff = entryDeadline(a).getTime() - entryDeadline(b).getTime();
     return groupOf(a, now) === 3 ? -timeDiff : timeDiff;
   });
 }
 
-// 手动顺序值（M3-2 拖拽排序启用），无手动顺序的条目排在其组内末尾
+// 手动顺序值，无手动顺序的条目排在末尾
 function orderValue(entry: Entry): number {
   return entry.sortIndex ?? Number.MAX_SAFE_INTEGER;
 }

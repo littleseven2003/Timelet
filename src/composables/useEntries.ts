@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { listen } from '@tauri-apps/api/event';
 import type { Entry } from '../types/entry';
-import { deleteEntry, listEntries, saveEntry } from '../api/entries';
+import { deleteEntry, listEntries, reorderEntries, saveEntry } from '../api/entries';
 
 // 模块级共享状态：同一窗口内的多个组件使用同一份数据
 const entries = ref<Entry[]>([]);
@@ -39,7 +39,12 @@ export function useEntries() {
     await reload();
   }
 
-  return { entries, loaded, loading, reload, upsert, remove, ensureChangeListener };
+  async function reorder(ids: string[]) {
+    await reorderEntries(ids);
+    await reload();
+  }
+
+  return { entries, loaded, loading, reload, upsert, remove, reorder, ensureChangeListener };
 }
 
 // 由条目字段构造一条新记录的默认值（id 与时间戳在此生成）

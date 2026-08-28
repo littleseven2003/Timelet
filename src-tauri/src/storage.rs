@@ -22,6 +22,8 @@ pub struct Entry {
     pub time: Option<String>,
     pub color: String,
     pub pinned: bool,
+    // 手动排序值（拖拽后生成），缺失表示按自动规则排序
+    pub sort_index: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -107,4 +109,22 @@ pub fn entry_delete(
 // 数据变更后广播事件，让隐藏中的面板窗口刷新列表
 fn notify_changed(app: &AppHandle) {
     app.emit("entries-changed", ()).ok();
+}
+
+// 按给定 id 顺序写入手动排序值，一次落盘并广播
+#[tauri::command]
+pub fn entry_reorder(
+    app: AppHandle,
+    state: State<'_, EntryStore>,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    let mut entries = state.0.lock().unwrap();
+    for (index, id) in ids.iter().enumerate() {
+        if let Some(entry) = entries.iter_mut().find(|e| e.id == *id) {
+            entry.sort_index = Some(index as i64);
+        }
+    }
+    save(&app, &entries)?;
+    notify_changed(&app);
+    Ok(())
 }

@@ -11,7 +11,7 @@ type NavKey = 'entries' | 'settings' | 'about';
 
 const { t } = useI18n();
 const activeNav = ref<NavKey>('entries');
-const { entries, loaded, reload, upsert, remove } = useEntries();
+const { entries, loaded, reload, upsert, remove, reorder } = useEntries();
 
 // 编辑态：editing 非空时内容区切换为表单
 const editing = ref<Entry | null>(null);
@@ -21,6 +21,39 @@ const deletingId = ref<string | null>(null);
 
 const sorted = computed(() => sortEntries(entries.value));
 const canSave = computed(() => !!editing.value?.name && !!editing.value?.date);
+
+// 拖拽排序：拖动过程用本地预览列表渲染，落点后一次性持久化
+const dragId = ref<string | null>(null);
+const previewList = ref<Entry[] | null>(null);
+const displayList = computed(() => previewList.value ?? sorted.value);
+
+function onDragStart(id: string) {
+  dragId.value = id;
+}
+
+function onDragEnter(id: string) {
+  if (!dragId.value || dragId.value === id) return;
+  const base = previewList.value ?? sorted.value;
+  const from = base.findIndex((entry) => entry.id === dragId.value);
+  const to = base.findIndex((entry) => entry.id === id);
+  if (from < 0 || to < 0) return;
+  const next = [...base];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved!);
+  previewList.value = next;
+}
+
+async function onDrop() {
+  const list = previewList.value;
+  dragId.value = null;
+  previewList.value = null;
+  if (list) await reorder(list.map((entry) => entry.id));
+}
+
+function onDragEnd() {
+  dragId.value = null;
+  previewList.value = null;
+}
 
 onMounted(() => reload());
 
@@ -183,7 +216,18 @@ async function confirmRemove() {
           </p>
 
           <ul class="entry-list">
-            <li v-for="entry in sorted" :key="entry.id" class="entry-item">
+            <li
+              v-for="entry in displayList"
+              :key="entry.id"
+              class="entry-item"
+              :class="{ 'entry-item--dragging': entry.id === dragId }"
+              draggable="true"
+              @dragstart="onDragStart(entry.id)"
+              @dragenter="onDragEnter(entry.id)"
+              @dragover.prevent
+              @drop.prevent="onDrop"
+              @dragend="onDragEnd"
+            >
               <span class="entry-item__color" :style="{ backgroundColor: entry.color }" />
               <div class="entry-item__info">
                 <span class="entry-item__name">
@@ -313,6 +357,11 @@ async function confirmRemove() {
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
   background-color: #fff;
+  cursor: grab;
+}
+
+.entry-item--dragging {
+  opacity: 0.5;
 }
 
 .entry-item__color {

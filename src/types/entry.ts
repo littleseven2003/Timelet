@@ -9,7 +9,7 @@ export interface Entry {
   date: string;
   /** 可选时刻（HH:mm），缺失表示纯日期条目 */
   time?: string;
-  /** 手动排序值（拖拽后生成，M3-2 启用），缺失表示按自动规则排序 */
+  /** 手动排序值（拖拽后生成），缺失表示按自动规则排序 */
   sortIndex?: number;
   color: string;
   pinned: boolean;

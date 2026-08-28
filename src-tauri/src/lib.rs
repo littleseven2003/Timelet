@@ -13,7 +13,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             storage::entry_list,
             storage::entry_save,
-            storage::entry_delete
+            storage::entry_delete,
+            storage::entry_reorder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
