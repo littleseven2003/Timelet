@@ -6,6 +6,10 @@ export default {
   panel: {
     emptyTitle: '还没有倒计时',
     emptyHint: '打开配置窗口，添加你的第一个条目',
+    addEntry: '新增条目',
+    editEntry: '编辑',
+    detailTarget: '目标',
+    detailStart: '起始',
     daysLeft: '剩余 {days} 天',
     today: '就是今天',
     expired: '已过期 {days} 天',

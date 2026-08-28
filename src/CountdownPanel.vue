@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Entry } from './types/entry';
 import { useEntries } from './composables/useEntries';
 import { getSettings } from './api/settings';
-import { formatEntryText, isExpiredCountdown, sortEntries } from './utils/entries';
+import { entryDeadline, formatEntryText, isExpiredCountdown, sortEntries } from './utils/entries';
 
 const { t, locale } = useI18n();
 const { entries, loaded, reload, ensureChangeListener } = useEntries();
@@ -55,6 +55,39 @@ function entryTitle(entry: Entry): string {
   return entry.note ? `${entry.name}\n${entry.note}` : entry.name;
 }
 
+// 左键单击条目：展开/收起缩略详情（同时只展开一条）
+const expandedId = ref<string | null>(null);
+
+function toggleExpanded(id: string) {
+  expandedId.value = expandedId.value === id ? null : id;
+}
+
+// 缩略详情首行：完整日期 + 星期 + 时刻（若有）
+function detailLine(entry: Entry): string {
+  const target = entryDeadline(entry);
+  const date = target.toLocaleDateString(locale.value, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  const weekday = target.toLocaleDateString(locale.value, { weekday: 'long' });
+  const prefix = entry.entryType === 'countdown' ? t('panel.detailTarget') : t('panel.detailStart');
+  return entry.time ? `${prefix} ${date} ${weekday} ${entry.time}` : `${prefix} ${date} ${weekday}`;
+}
+
+// 面板内直达主界面的动作
+function openCreate() {
+  invoke('open_main_create').catch(() => {
+    /* 静默 */
+  });
+}
+
+function openEditor(id: string) {
+  invoke('open_entry_editor', { id }).catch(() => {
+    /* 静默 */
+  });
+}
+
 onMounted(async () => {
   reload();
   ensureChangeListener();
@@ -80,26 +113,44 @@ onUnmounted(() => clearInterval(ticker));
 
     <div v-if="loaded && sorted.length === 0" class="panel__empty">
       <p class="panel__empty-title">{{ t('panel.emptyTitle') }}</p>
-      <p class="panel__empty-hint">{{ t('panel.emptyHint') }}</p>
+      <button class="panel__add" type="button" @click="openCreate">
+        {{ t('panel.addEntry') }}
+      </button>
     </div>
 
-    <ul v-else class="panel__list">
-      <li
-        v-for="entry in sorted"
-        :key="entry.id"
-        class="panel-item"
-        @contextmenu.prevent.stop="showContextMenu(entry.id)"
-      >
-        <span class="panel-item__color" :style="{ backgroundColor: entry.color }" />
-        <span class="panel-item__name" :title="entryTitle(entry)">{{ entry.name }}</span>
-        <span
-          class="panel-item__days"
-          :style="{ color: entry.color }"
+    <template v-else>
+      <ul class="panel__list">
+        <li
+          v-for="entry in sorted"
+          :key="entry.id"
+          class="panel-item"
+          :class="{ 'panel-item--expanded': expandedId === entry.id }"
+          @click="toggleExpanded(entry.id)"
+          @contextmenu.prevent.stop="showContextMenu(entry.id)"
         >
-          {{ daysText(entry) }}
-        </span>
-      </li>
-    </ul>
+          <div class="panel-item__row">
+            <span class="panel-item__color" :style="{ backgroundColor: entry.color }" />
+            <span class="panel-item__name" :title="entryTitle(entry)">{{ entry.name }}</span>
+            <span class="panel-item__days" :style="{ color: entry.color }">
+              {{ daysText(entry) }}
+            </span>
+          </div>
+
+          <!-- 缩略详情：完整日期时刻与备注 -->
+          <div v-if="expandedId === entry.id" class="panel-item__detail" @click.stop>
+            <span class="panel-item__detail-line">{{ detailLine(entry) }}</span>
+            <p v-if="entry.note" class="panel-item__detail-note">{{ entry.note }}</p>
+            <button class="panel-item__detail-edit" type="button" @click="openEditor(entry.id)">
+              {{ t('panel.editEntry') }}
+            </button>
+          </div>
+        </li>
+      </ul>
+
+      <button class="panel__add panel__add--footer" type="button" @click="openCreate">
+        {{ t('panel.addEntry') }}
+      </button>
+    </template>
   </aside>
 </template>
 
@@ -166,14 +217,73 @@ onUnmounted(() => clearInterval(ticker));
 
 .panel-item {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 8px;
+  flex-direction: column;
+  padding: 4px 8px;
   border-radius: 8px;
+  cursor: pointer;
 }
 
-.panel-item:hover {
+.panel-item__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.panel-item:hover,
+.panel-item--expanded {
   background-color: rgba(0, 0, 0, 0.04);
+}
+
+.panel-item__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 8px 14px;
+}
+
+.panel-item__detail-line {
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.panel-item__detail-note {
+  font-size: 12px;
+  opacity: 0.55;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.panel-item__detail-edit {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: #0067c0;
+  cursor: pointer;
+  padding: 0;
+}
+
+.panel-item__detail-edit:hover {
+  text-decoration: underline;
+}
+
+.panel__add {
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: #0067c0;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.panel__add:hover {
+  text-decoration: underline;
+}
+
+.panel__add--footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
 }
 
 .panel-item__color {
@@ -210,8 +320,18 @@ onUnmounted(() => clearInterval(ticker));
     border-bottom-color: rgba(255, 255, 255, 0.1);
   }
 
-  .panel-item:hover {
+  .panel-item:hover,
+  .panel-item--expanded {
     background-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .panel-item__detail-edit,
+  .panel__add {
+    color: #6cb8ff;
+  }
+
+  .panel__add--footer {
+    border-top-color: rgba(255, 255, 255, 0.1);
   }
 }
 </style>

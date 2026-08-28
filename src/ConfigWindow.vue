@@ -103,22 +103,28 @@ async function confirmRemove() {
   if (editing.value?.id === id) cancelEdit();
 }
 
-// 从面板"编辑详情"进入：数据就绪后按 id 打开编辑表单
-async function openEditorById(id: string) {
-  if (activeNav.value !== 'entries') activeNav.value = 'entries';
+// 从面板"编辑详情"或"新增条目"进入：数据就绪后应用动作
+async function applyPendingAction(action: PendingAction) {
+  activeNav.value = 'entries';
   if (!loaded.value) await reload();
-  const entry = entries.value.find((item) => item.id === id);
+  if (action.kind === 'create') {
+    openCreate();
+    return;
+  }
+  const entry = entries.value.find((item) => item.id === action.id);
   if (entry) openEdit(entry);
 }
 
+// 面板动作载荷：新建或编辑指定条目
+type PendingAction = { kind: 'create' } | { kind: 'edit'; id: string };
+
 onMounted(async () => {
-  await reload();
-  // 窗口先于面板右键动作创建时，取走暂存的待编辑条目
-  const pendingId = await invoke<string | null>('take_pending_edit');
-  if (pendingId) await openEditorById(pendingId);
+  // 窗口先于面板动作创建时，取走暂存的待执行动作
+  const pending = await invoke<PendingAction | null>('take_pending_action');
+  if (pending) await applyPendingAction(pending);
   // 窗口已存在时后续动作通过事件送达
-  listen<string>('open-entry-editor', (event) => {
-    void openEditorById(event.payload);
+  listen<PendingAction>('open-entry-action', (event) => {
+    void applyPendingAction(event.payload);
   });
 });
 </script>

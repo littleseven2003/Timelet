@@ -7,6 +7,10 @@ export default {
   panel: {
     emptyTitle: 'No countdown yet',
     emptyHint: 'Open the settings window to add your first entry',
+    addEntry: 'Add Entry',
+    editEntry: 'Edit',
+    detailTarget: 'Target',
+    detailStart: 'Start',
     daysLeft: '{days} days left',
     today: 'Today',
     expired: 'Expired {days} days ago',
