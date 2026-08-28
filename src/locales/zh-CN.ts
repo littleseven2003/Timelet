@@ -6,6 +6,10 @@ export default {
   panel: {
     emptyTitle: '还没有倒计时',
     emptyHint: '打开配置窗口，添加你的第一个条目',
+    daysLeft: '剩余 {days} 天',
+    today: '就是今天',
+    expired: '已过期 {days} 天',
+    elapsed: '已过 {days} 天',
   },
   config: {
     nav: {

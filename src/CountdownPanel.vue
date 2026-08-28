@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
+import type { Entry } from './types/entry';
+import { useEntries } from './composables/useEntries';
+import { entryDays, sortEntries } from './utils/entries';
 
 const { t, locale } = useI18n();
+const { entries, loaded, reload, ensureChangeListener } = useEntries();
 
 // 当天日期与星期，跟随 i18n 语言展示
 const today = computed(() => {
@@ -16,6 +20,22 @@ const today = computed(() => {
     weekday: now.toLocaleDateString(locale.value, { weekday: 'long' }),
   };
 });
+
+const sorted = computed(() => sortEntries(entries.value));
+
+// 天数展示文案：倒计时（今天/剩余/已过期）与正计时
+function daysText(entry: Entry): string {
+  const days = entryDays(entry);
+  if (entry.entryType === 'elapsed') return t('panel.elapsed', { days });
+  if (days === 0) return t('panel.today');
+  if (days < 0) return t('panel.expired', { days: -days });
+  return t('panel.daysLeft', { days });
+}
+
+onMounted(() => {
+  reload();
+  ensureChangeListener();
+});
 </script>
 
 <template>
@@ -25,10 +45,23 @@ const today = computed(() => {
       <span class="panel__weekday">{{ today.weekday }}</span>
     </header>
 
-    <div class="panel__empty">
+    <div v-if="loaded && sorted.length === 0" class="panel__empty">
       <p class="panel__empty-title">{{ t('panel.emptyTitle') }}</p>
       <p class="panel__empty-hint">{{ t('panel.emptyHint') }}</p>
     </div>
+
+    <ul v-else class="panel__list">
+      <li v-for="entry in sorted" :key="entry.id" class="panel-item">
+        <span class="panel-item__color" :style="{ backgroundColor: entry.color }" />
+        <span class="panel-item__name" :title="entry.name">{{ entry.name }}</span>
+        <span
+          class="panel-item__days"
+          :style="{ color: entry.color }"
+        >
+          {{ daysText(entry) }}
+        </span>
+      </li>
+    </ul>
   </aside>
 </template>
 
@@ -83,6 +116,51 @@ const today = computed(() => {
   opacity: 0.55;
 }
 
+.panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  border-radius: 8px;
+}
+
+.panel-item:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.panel-item__color {
+  width: 4px;
+  height: 26px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.panel-item__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-item__days {
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (prefers-color-scheme: dark) {
   .panel {
     background-color: #2b2b2b;
@@ -92,6 +170,10 @@ const today = computed(() => {
 
   .panel__header {
     border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .panel-item:hover {
+    background-color: rgba(255, 255, 255, 0.06);
   }
 }
 </style>

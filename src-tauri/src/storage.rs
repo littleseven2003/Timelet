@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 // 数据文件结构版本，字段演进时递增并编写迁移逻辑
 const SCHEMA_VERSION: u32 = 1;
@@ -84,7 +84,9 @@ pub fn entry_save(
         Some(existing) => *existing = entry,
         None => entries.push(entry),
     }
-    save(&app, &entries)
+    save(&app, &entries)?;
+    notify_changed(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -95,5 +97,12 @@ pub fn entry_delete(
 ) -> Result<(), String> {
     let mut entries = state.0.lock().unwrap();
     entries.retain(|e| e.id != id);
-    save(&app, &entries)
+    save(&app, &entries)?;
+    notify_changed(&app);
+    Ok(())
+}
+
+// 数据变更后广播事件，让隐藏中的面板窗口刷新列表
+fn notify_changed(app: &AppHandle) {
+    app.emit("entries-changed", ()).ok();
 }
