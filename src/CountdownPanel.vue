@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Entry } from './types/entry';
 import { useEntries } from './composables/useEntries';
 import { getSettings } from './api/settings';
-import { entryDays, entryDeadline, isExpiredCountdown, sortEntries } from './utils/entries';
+import { formatEntryText, isExpiredCountdown, sortEntries } from './utils/entries';
 
 const { t, locale } = useI18n();
 const { entries, loaded, reload, ensureChangeListener } = useEntries();
@@ -38,35 +38,9 @@ const sorted = computed(() => {
   return sortEntries(visible);
 });
 
-// 天数/时刻展示文案：倒计时（今天/剩余/已过期）与正计时
+// 展示文案统一走共享工具，与编辑预览保持一致
 function daysText(entry: Entry): string {
-  if (entry.time) return timedText(entry, now.value);
-  const days = entryDays(entry);
-  if (entry.entryType === 'elapsed') return t('panel.elapsed', { days });
-  if (days === 0) return t('panel.today');
-  if (days < 0) return t('panel.expired', { days: -days });
-  return t('panel.daysLeft', { days });
-}
-
-// 带时刻条目按精确间隔展示：天+小时 → 小时+分 → 分钟
-function timedText(entry: Entry, nowMs: number): string {
-  const diffMinutes = Math.round((entryDeadline(entry).getTime() - nowMs) / 60_000);
-  const expired = diffMinutes < 0;
-  const abs = Math.abs(diffMinutes);
-  const days = Math.floor(abs / 1440);
-  const hours = Math.floor((abs % 1440) / 60);
-  const minutes = abs % 60;
-
-  if (days > 0) {
-    return t(expired ? 'panel.ago.daysHours' : 'panel.left.daysHours', { d: days, h: hours });
-  }
-  if (hours > 0) {
-    return t(expired ? 'panel.ago.hoursMinutes' : 'panel.left.hoursMinutes', { h: hours, m: minutes });
-  }
-  if (minutes > 0) {
-    return t(expired ? 'panel.ago.minutes' : 'panel.left.minutes', { m: minutes });
-  }
-  return expired ? t('panel.expiredOnly') : t('panel.soon');
+  return formatEntryText(entry, now.value, t);
 }
 
 // 右键唤起原生菜单：条目上传入 id（编辑详情/打开主界面），空白处仅打开主界面

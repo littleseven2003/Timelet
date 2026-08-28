@@ -6,7 +6,7 @@ import { listen } from '@tauri-apps/api/event';
 import type { Entry } from './types/entry';
 import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
-import { sortEntries } from './utils/entries';
+import { formatEntryText, sortEntries } from './utils/entries';
 import DateTimePicker from './components/DateTimePicker.vue';
 import SettingsSection from './components/SettingsSection.vue';
 
@@ -24,6 +24,12 @@ const deletingId = ref<string | null>(null);
 
 const sorted = computed(() => sortEntries(entries.value));
 const canSave = computed(() => !!editing.value?.name && !!editing.value?.date);
+
+// 预览卡文案：随名称/类型/日期输入实时变化
+const previewText = computed(() => {
+  if (!editing.value) return '';
+  return formatEntryText(editing.value, Date.now(), (key, params) => t(key, params ?? {}));
+});
 
 // 拖拽排序：拖动过程用本地预览列表渲染，落点后一次性持久化
 const dragId = ref<string | null>(null);
@@ -89,8 +95,11 @@ async function submit() {
 
 async function confirmRemove() {
   if (!deletingId.value) return;
-  await remove(deletingId.value);
+  const id = deletingId.value;
   deletingId.value = null;
+  await remove(id);
+  // 从编辑表单内删除时同步关闭表单
+  if (editing.value?.id === id) cancelEdit();
 }
 
 // 从面板"编辑详情"进入：数据就绪后按 id 打开编辑表单
@@ -137,87 +146,104 @@ onMounted(async () => {
             {{ isNew ? t('config.addEntry') : t('config.editEntry') }}
           </h2>
 
-          <label class="entry-form__field">
-            <span class="entry-form__label">{{ t('config.fieldName') }}</span>
-            <input
-              v-model="editing.name"
-              class="entry-form__input"
-              type="text"
-              :placeholder="t('config.namePlaceholder')"
-              maxlength="30"
-            />
-          </label>
-
-          <div class="entry-form__field">
-            <span class="entry-form__label">{{ t('config.fieldType') }}</span>
-            <div class="entry-form__options">
-              <button
-                type="button"
-                class="entry-form__option"
-                :class="{ 'entry-form__option--active': editing.entryType === 'countdown' }"
-                @click="editing.entryType = 'countdown'"
-              >
-                {{ t('config.typeCountdown') }}
-              </button>
-              <button
-                type="button"
-                class="entry-form__option"
-                :class="{ 'entry-form__option--active': editing.entryType === 'elapsed' }"
-                @click="editing.entryType = 'elapsed'"
-              >
-                {{ t('config.typeElapsed') }}
-              </button>
-            </div>
-          </div>
-
-          <div class="entry-form__field">
-            <span class="entry-form__label">
-              {{ editing.entryType === 'countdown' ? t('config.targetDate') : t('config.startDate') }}
+          <!-- 实时预览：与面板条目样式一致 -->
+          <div class="entry-preview">
+            <span class="entry-preview__color" :style="{ backgroundColor: editing.color }" />
+            <span class="entry-preview__name">{{ editing.name || t('config.previewName') }}</span>
+            <span class="entry-preview__days" :style="{ color: editing.color }">
+              {{ previewText || t('config.previewDays') }}
             </span>
-            <DateTimePicker
-              :date="editing.date"
-              :time="editing.time ?? null"
-              :with-time="!!editing.time"
-              @update:date="editing.date = $event"
-              @update:time="editing.time = $event"
-            />
-            <label class="entry-form__include-time">
+          </div>
+
+          <div class="entry-form__body">
+            <section class="form-section">
+              <h3 class="form-section__title">{{ t('config.sectionBasic') }}</h3>
               <input
-                type="checkbox"
-                :checked="!!editing.time"
-                @change="toggleTime(($event.target as HTMLInputElement).checked)"
+                v-model="editing.name"
+                class="entry-form__input entry-form__input--hero"
+                type="text"
+                :placeholder="t('config.namePlaceholder')"
+                maxlength="30"
               />
-              <span>{{ t('config.includeTime') }}</span>
-            </label>
+              <div class="entry-form__options">
+                <button
+                  type="button"
+                  class="entry-form__option"
+                  :class="{ 'entry-form__option--active': editing.entryType === 'countdown' }"
+                  @click="editing.entryType = 'countdown'"
+                >
+                  {{ t('config.typeCountdown') }}
+                </button>
+                <button
+                  type="button"
+                  class="entry-form__option"
+                  :class="{ 'entry-form__option--active': editing.entryType === 'elapsed' }"
+                  @click="editing.entryType = 'elapsed'"
+                >
+                  {{ t('config.typeElapsed') }}
+                </button>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <h3 class="form-section__title">{{ t('config.sectionTime') }}</h3>
+              <span class="entry-form__label">
+                {{ editing.entryType === 'countdown' ? t('config.targetDate') : t('config.startDate') }}
+              </span>
+              <DateTimePicker
+                :date="editing.date"
+                :time="editing.time ?? null"
+                :with-time="!!editing.time"
+                @update:date="editing.date = $event"
+                @update:time="editing.time = $event"
+              />
+              <label class="entry-form__toggle">
+                <input
+                  type="checkbox"
+                  :checked="!!editing.time"
+                  @change="toggleTime(($event.target as HTMLInputElement).checked)"
+                />
+                <span>{{ t('config.includeTime') }}</span>
+              </label>
+            </section>
+
+            <section class="form-section">
+              <h3 class="form-section__title">{{ t('config.sectionAppearance') }}</h3>
+              <span class="entry-form__label">{{ t('config.fieldColor') }}</span>
+              <div class="entry-form__colors">
+                <button
+                  v-for="color in ENTRY_COLORS"
+                  :key="color"
+                  type="button"
+                  class="entry-form__color"
+                  :class="{ 'entry-form__color--active': editing.color === color }"
+                  :style="{ backgroundColor: color }"
+                  :aria-label="color"
+                  @click="editing.color = color"
+                />
+              </div>
+              <label class="entry-form__toggle">
+                <input v-model="editing.pinned" type="checkbox" />
+                <span>{{ t('config.fieldPinned') }}</span>
+              </label>
+            </section>
           </div>
 
-          <div class="entry-form__field">
-            <span class="entry-form__label">{{ t('config.fieldColor') }}</span>
-            <div class="entry-form__colors">
-              <button
-                v-for="color in ENTRY_COLORS"
-                :key="color"
-                type="button"
-                class="entry-form__color"
-                :class="{ 'entry-form__color--active': editing.color === color }"
-                :style="{ backgroundColor: color }"
-                :aria-label="color"
-                @click="editing.color = color"
-              />
-            </div>
-          </div>
-
-          <label class="entry-form__field entry-form__field--row">
-            <input v-model="editing.pinned" type="checkbox" />
-            <span>{{ t('config.fieldPinned') }}</span>
-          </label>
-
-          <div class="entry-form__actions">
-            <button class="btn btn--primary" type="submit" :disabled="!canSave">
-              {{ t('config.save') }}
+          <div class="entry-form__footer">
+            <button
+              v-if="!isNew"
+              class="btn btn--danger"
+              type="button"
+              @click="deletingId === editing.id ? confirmRemove() : (deletingId = editing.id)"
+            >
+              {{ deletingId === editing.id ? t('config.confirmDelete') : t('config.delete') }}
             </button>
+            <span class="entry-form__spacer" />
             <button class="btn" type="button" @click="cancelEdit">
               {{ t('config.cancel') }}
+            </button>
+            <button class="btn btn--primary" type="submit" :disabled="!canSave">
+              {{ t('config.save') }}
             </button>
           </div>
         </form>
@@ -466,10 +492,86 @@ onMounted(async () => {
 }
 
 .entry-form {
-  max-width: 420px;
+  max-width: 560px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+}
+
+/* 实时预览卡：结构对齐面板条目 */
+.entry-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  background-color: #fff;
+}
+
+.entry-preview__color {
+  width: 4px;
+  height: 28px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.entry-preview__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entry-preview__days {
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.entry-form__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  background-color: #fff;
+}
+
+.form-section__title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.55;
+  margin: 0;
+}
+
+.entry-form__input--hero {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
+.entry-form__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.entry-form__spacer {
+  flex: 1;
 }
 
 .entry-form__field {
@@ -490,12 +592,13 @@ onMounted(async () => {
   opacity: 0.7;
 }
 
-.entry-form__include-time {
+.entry-form__include-time,
+.entry-form__toggle {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  margin-top: 8px;
+  margin-top: 2px;
   cursor: pointer;
 }
 
@@ -584,9 +687,15 @@ onMounted(async () => {
   .entry-item,
   .btn,
   .entry-form__input,
-  .entry-form__option {
+  .entry-form__option,
+  .entry-preview,
+  .form-section {
     background-color: #333;
     border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .entry-form__footer {
+    border-top-color: rgba(255, 255, 255, 0.1);
   }
 
   .btn--primary {

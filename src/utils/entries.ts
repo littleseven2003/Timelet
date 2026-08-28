@@ -40,6 +40,44 @@ export function isExpiredCountdown(entry: Entry, nowMs: number = Date.now()): bo
   return entryDeadline(entry).getTime() < nowMs;
 }
 
+// 展示文案翻译函数的最小形状（兼容 vue-i18n 的 t）
+type Translate = (key: string, params?: Record<string, number>) => string;
+
+// 条目展示文案：天数（今天/剩余/已过期/已过）或时刻精确间隔，供面板与编辑预览共用
+export function formatEntryText(entry: Entry, nowMs: number, t: Translate): string {
+  if (!entry.date) return '';
+  if (entry.time) return timedText(entry, nowMs, t);
+  const days = entryDays(entry);
+  if (entry.entryType === 'elapsed') return t('panel.elapsed', { days });
+  if (days === 0) return t('panel.today');
+  if (days < 0) return t('panel.expired', { days: -days });
+  return t('panel.daysLeft', { days });
+}
+
+// 带时刻条目按精确间隔展示：天+小时 → 小时+分 → 分钟
+function timedText(entry: Entry, nowMs: number, t: Translate): string {
+  const diffMinutes = Math.round((entryDeadline(entry).getTime() - nowMs) / 60_000);
+  const expired = diffMinutes < 0;
+  const abs = Math.abs(diffMinutes);
+  const days = Math.floor(abs / 1440);
+  const hours = Math.floor((abs % 1440) / 60);
+  const minutes = abs % 60;
+
+  if (days > 0) {
+    return t(expired ? 'panel.ago.daysHours' : 'panel.left.daysHours', { d: days, h: hours });
+  }
+  if (hours > 0) {
+    return t(expired ? 'panel.ago.hoursMinutes' : 'panel.left.hoursMinutes', {
+      h: hours,
+      m: minutes,
+    });
+  }
+  if (minutes > 0) {
+    return t(expired ? 'panel.ago.minutes' : 'panel.left.minutes', { m: minutes });
+  }
+  return expired ? t('panel.expiredOnly') : t('panel.soon');
+}
+
 // 分组序：0 置顶、1 未到期倒计时、2 正计时、3 已过期倒计时；带时刻条目以当前时刻判定
 function groupOf(entry: Entry, now: number): number {
   if (entry.pinned) return 0;
