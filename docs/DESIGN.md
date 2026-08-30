@@ -42,7 +42,7 @@
 | type                  | `countdown` \| `elapsed` | 倒计时（距目标日）/ 正计时（自起始日已过） |
 | date                  | string (ISO 日期)        | 目标日期（倒计时）或起始日期（正计时）     |
 | time                  | string? (HH:mm)          | 可选时刻；带时刻的条目按小时/分钟精度计算展示（M3 实装） |
-| color                 | string                   | 条目标签色（预设色板中选取）               |
+| color                 | string                   | 条目标签色（预设色板或自定义取色）         |
 | pinned                | boolean                  | 是否置顶显示                               |
 | createdAt / updatedAt | string                   | 创建/更新时间                              |
 
