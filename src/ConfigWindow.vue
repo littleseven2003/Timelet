@@ -53,6 +53,12 @@ watch(editing, (value) => {
   if (value) void nextTick(() => nameInput.value?.focus());
 });
 
+// 「更多选项」折叠区：编辑的条目已在用置顶/备注时自动展开
+const showMore = ref(false);
+watch(editing, (value) => {
+  showMore.value = !!value && (!!value.note || value.pinned);
+});
+
 // 当前颜色不在预设色板中时高亮自定义取色块
 const isCustomColor = computed(
   () => editing.value != null && !(ENTRY_COLORS as readonly string[]).includes(editing.value.color),
@@ -387,19 +393,35 @@ onMounted(async () => {
                     </label>
                   </div>
                 </div>
-                <div class="form-row">
-                  <span class="form-row__label">{{ t('config.fieldPinned') }}</span>
-                  <ToggleSwitch v-model="editing.pinned" />
-                </div>
-                <div class="form-row form-row--column form-row--grow">
-                  <span class="form-row__label">{{ t('config.fieldNote') }}</span>
-                  <textarea
-                    v-model="editing.note"
-                    class="entry-form__input entry-form__note"
-                    :placeholder="t('config.notePlaceholder')"
-                    maxlength="100"
-                  />
-                </div>
+                <button class="form-fold" type="button" @click="showMore = !showMore">
+                  <span>{{ showMore ? t('config.showLess') : t('config.showMore') }}</span>
+                  <svg
+                    class="form-fold__chevron"
+                    :class="{ 'form-fold__chevron--open': showMore }"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  >
+                    <path d="M4 6l4 4 4-4" />
+                  </svg>
+                </button>
+                <template v-if="showMore">
+                  <div class="form-row">
+                    <span class="form-row__label">{{ t('config.fieldPinned') }}</span>
+                    <ToggleSwitch v-model="editing.pinned" />
+                  </div>
+                  <div class="form-row form-row--column form-row--grow">
+                    <span class="form-row__label">{{ t('config.fieldNote') }}</span>
+                    <textarea
+                      v-model="editing.note"
+                      class="entry-form__input entry-form__note"
+                      :placeholder="t('config.notePlaceholder')"
+                      maxlength="100"
+                    />
+                  </div>
+                </template>
               </section>
             </div>
           </div>
@@ -968,6 +990,35 @@ onMounted(async () => {
 .form-row__label {
   font-size: 13px;
   opacity: 0.7;
+}
+
+/* 「更多选项」折叠开关行 */
+.form-fold {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  font-size: 12px;
+  opacity: 0.65;
+  cursor: pointer;
+  color: inherit;
+  padding: 2px 0;
+  align-self: flex-start;
+}
+
+.form-fold:hover {
+  opacity: 1;
+}
+
+.form-fold__chevron {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.2s ease-out;
+}
+
+.form-fold__chevron--open {
+  transform: rotate(180deg);
 }
 
 .entry-form__field {

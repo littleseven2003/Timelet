@@ -97,6 +97,8 @@ export default {
       year: '年',
     },
     fieldNote: '备注',
+    showMore: '更多选项',
+    showLess: '收起选项',
     notePlaceholder: '选填，鼠标悬停面板条目时显示',
     pinnedTag: '置顶',
     save: '保存',
