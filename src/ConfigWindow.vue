@@ -23,6 +23,12 @@ const editing = ref<Entry | null>(null);
 const isNew = ref(false);
 // 删除确认弹窗：记录待删除条目
 const deleteTarget = ref<Entry | null>(null);
+// 列表行右键菜单：定位与目标条目
+const ctxMenu = ref<{ x: number; y: number; entry: Entry } | null>(null);
+
+async function togglePinned(entry: Entry) {
+  await upsert({ ...entry, pinned: !entry.pinned, updatedAt: new Date().toISOString() });
+}
 
 const sorted = computed(() => sortEntries(entries.value));
 const canSave = computed(() => !!editing.value?.name && !!editing.value?.date);
@@ -81,10 +87,12 @@ const repeatOptions = computed(() => [
   { value: 'workday', label: t('config.repeat.workday') },
 ]);
 
-// Esc：先关弹窗，再退出编辑态
+// Esc：先关右键菜单，再关弹窗，再退出编辑态
 function onKeydown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return;
-  if (deleteTarget.value) {
+  if (ctxMenu.value) {
+    ctxMenu.value = null;
+  } else if (deleteTarget.value) {
     deleteTarget.value = null;
   } else if (editing.value) {
     cancelEdit();
@@ -464,6 +472,9 @@ onMounted(async () => {
               @dragover.prevent
               @drop.prevent="onDrop"
               @dragend="onDragEnd"
+              @contextmenu.prevent="
+                ctxMenu = { x: $event.clientX, y: $event.clientY, entry }
+              "
             >
               <span class="entry-item__color" :style="{ backgroundColor: entry.color }" />
               <div class="entry-item__info">
@@ -485,7 +496,7 @@ onMounted(async () => {
               <span class="entry-item__days" :style="{ color: entry.color }">
                 {{ formatEntryText(entry, Date.now(), (key, params) => t(key, params ?? {})) }}
               </span>
-              <div class="entry-item__actions">
+              <div class="entry-item__actions" @mousedown.stop>
                 <button class="btn btn--small" type="button" @click="openEdit(entry)">
                   {{ t('config.edit') }}
                 </button>
@@ -513,6 +524,47 @@ onMounted(async () => {
         <p class="config__placeholder">{{ t('config.aboutPlaceholder') }}</p>
       </template>
     </main>
+
+    <!-- 列表行右键菜单：透明遮罩负责点击外部关闭 -->
+    <div
+      v-if="ctxMenu"
+      class="ctx-overlay"
+      @click="ctxMenu = null"
+      @contextmenu.prevent="ctxMenu = null"
+    >
+      <div class="ctx-menu" :style="{ left: `${ctxMenu.x}px`, top: `${ctxMenu.y}px` }">
+        <button
+          class="ctx-menu__item"
+          type="button"
+          @click="
+            openEdit(ctxMenu.entry);
+            ctxMenu = null;
+          "
+        >
+          {{ t('config.edit') }}
+        </button>
+        <button
+          class="ctx-menu__item"
+          type="button"
+          @click="
+            togglePinned(ctxMenu.entry);
+            ctxMenu = null;
+          "
+        >
+          {{ ctxMenu.entry.pinned ? t('config.unpin') : t('config.pinIt') }}
+        </button>
+        <button
+          class="ctx-menu__item ctx-menu__item--danger"
+          type="button"
+          @click="
+            deleteTarget = ctxMenu.entry;
+            ctxMenu = null;
+          "
+        >
+          {{ t('config.delete') }}
+        </button>
+      </div>
+    </div>
 
     <!-- 删除确认弹窗 -->
     <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
@@ -743,6 +795,44 @@ onMounted(async () => {
 .btn--danger-solid:hover {
   background-color: #e05555;
   border-color: #e05555;
+}
+
+/* 列表行右键菜单 */
+.ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
+.ctx-menu {
+  position: fixed;
+  min-width: 120px;
+  padding: 4px;
+  border-radius: 8px;
+  background-color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+.ctx-menu__item {
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: inherit;
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ctx-menu__item:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+.ctx-menu__item--danger {
+  color: #d33;
 }
 
 /* 删除确认弹窗 */
@@ -1127,6 +1217,15 @@ onMounted(async () => {
 
   .modal {
     background-color: #333;
+  }
+
+  .ctx-menu {
+    background-color: #3a3a3a;
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+
+  .ctx-menu__item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
   }
 
   .btn--danger-solid {

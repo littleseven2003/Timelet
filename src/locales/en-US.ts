@@ -102,6 +102,8 @@ export default {
     showLess: 'Fewer options',
     notePlaceholder: 'Optional, shown when hovering the entry in the panel',
     pinnedTag: 'Pinned',
+    pinIt: 'Pin',
+    unpin: 'Unpin',
     save: 'Save',
     cancel: 'Cancel',
     edit: 'Edit',

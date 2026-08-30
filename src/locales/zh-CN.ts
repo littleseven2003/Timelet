@@ -101,6 +101,8 @@ export default {
     showLess: '收起选项',
     notePlaceholder: '选填，鼠标悬停面板条目时显示',
     pinnedTag: '置顶',
+    pinIt: '置顶',
+    unpin: '取消置顶',
     save: '保存',
     cancel: '取消',
     edit: '编辑',
