@@ -98,8 +98,6 @@ export default {
       year: 'Year',
     },
     fieldNote: 'Note',
-    showMore: 'More options',
-    showLess: 'Fewer options',
     notePlaceholder: 'Optional, shown when hovering the entry in the panel',
     pinnedTag: 'Pinned',
     pinIt: 'Pin',
