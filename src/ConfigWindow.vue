@@ -576,8 +576,8 @@ onMounted(async () => {
 .config {
   display: flex;
   min-height: 100vh;
-  background-color: #f6f6f6;
-  color: #1a1a1a;
+  background-color: var(--ts-bg);
+  color: var(--ts-text);
 }
 
 .config__nav {
@@ -587,7 +587,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  border-right: 1px solid var(--ts-line);
   min-height: 100vh;
 }
 
@@ -621,12 +621,12 @@ onMounted(async () => {
 }
 
 .config__nav-item:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(42, 156, 219, 0.08);
 }
 
 .config__nav-item--active {
-  background-color: rgba(0, 145, 255, 0.12);
-  color: #0067c0;
+  background-color: rgba(42, 156, 219, 0.14);
+  color: var(--ts-primary-text);
   font-weight: 500;
 }
 
@@ -656,14 +656,14 @@ onMounted(async () => {
   border: none;
   background: none;
   font-size: 12px;
-  color: #d33;
+  color: var(--ts-coral);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
 }
 
 .entry-form__delete:hover {
-  background-color: rgba(214, 69, 69, 0.08);
+  background-color: rgba(201, 79, 85, 0.1);
 }
 
 .entry-list__title,
@@ -688,9 +688,9 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ts-line);
   border-radius: 10px;
-  background-color: #fff;
+  background-color: var(--ts-surface);
   cursor: grab;
 }
 
@@ -752,8 +752,8 @@ onMounted(async () => {
 }
 
 .btn {
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background-color: #fff;
+  border: 1px solid var(--ts-line);
+  background-color: var(--ts-surface);
   border-radius: 6px;
   padding: 6px 14px;
   font-size: 13px;
@@ -762,7 +762,7 @@ onMounted(async () => {
 }
 
 .btn:hover {
-  border-color: rgba(0, 0, 0, 0.24);
+  border-color: var(--ts-primary);
 }
 
 .btn:disabled {
@@ -771,28 +771,27 @@ onMounted(async () => {
 }
 
 .btn--primary {
-  background-color: #0067c0;
-  border-color: #0067c0;
+  background-color: var(--ts-primary);
+  border-color: var(--ts-primary);
   color: #fff;
 }
 
 .btn--primary:hover:not(:disabled) {
-  background-color: #0072d4;
+  filter: brightness(1.08);
 }
 
 .btn--danger {
-  color: #d33;
+  color: var(--ts-coral);
 }
 
 .btn--danger-solid {
-  background-color: #d64545;
-  border-color: #d64545;
+  background-color: var(--ts-coral);
+  border-color: var(--ts-coral);
   color: #fff;
 }
 
 .btn--danger-solid:hover {
-  background-color: #e05555;
-  border-color: #e05555;
+  filter: brightness(1.08);
 }
 
 /* 列表行右键菜单 */
@@ -807,8 +806,8 @@ onMounted(async () => {
   min-width: 120px;
   padding: 4px;
   border-radius: 8px;
-  background-color: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: var(--ts-surface);
+  border: 1px solid var(--ts-line);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
@@ -826,11 +825,11 @@ onMounted(async () => {
 }
 
 .ctx-menu__item:hover {
-  background-color: rgba(0, 0, 0, 0.06);
+  background-color: rgba(42, 156, 219, 0.08);
 }
 
 .ctx-menu__item--danger {
-  color: #d33;
+  color: var(--ts-coral);
 }
 
 /* 删除确认弹窗 */
@@ -848,7 +847,7 @@ onMounted(async () => {
   width: 320px;
   padding: 18px 20px;
   border-radius: 12px;
-  background-color: #fff;
+  background-color: var(--ts-surface);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -888,9 +887,9 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ts-line);
   border-radius: 10px;
-  background-color: #fff;
+  background-color: var(--ts-surface);
 }
 
 .entry-preview__color {
@@ -1015,9 +1014,9 @@ onMounted(async () => {
   flex-direction: column;
   gap: 10px;
   padding: 14px 16px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ts-line);
   border-radius: 10px;
-  background-color: #fff;
+  background-color: var(--ts-surface);
 }
 
 .form-section__title {
@@ -1057,7 +1056,7 @@ onMounted(async () => {
 
 .entry-form__helper--active {
   opacity: 0.85;
-  color: #b8860b;
+  color: var(--ts-amber);
 }
 
 .form-row {
@@ -1100,11 +1099,11 @@ onMounted(async () => {
 }
 
 .entry-form__input {
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--ts-line);
   border-radius: 6px;
   padding: 7px 10px;
   font-size: 13px;
-  background-color: #fff;
+  background-color: var(--ts-surface);
   color: inherit;
 }
 
@@ -1124,7 +1123,7 @@ onMounted(async () => {
 }
 
 .entry-form__color--active {
-  border-color: rgba(0, 0, 0, 0.5);
+  border-color: var(--ts-text);
 }
 
 /* 自定义取色块：虚线描边示意可自定义，内嵌隐藏的原生取色控件 */
@@ -1156,63 +1155,40 @@ onMounted(async () => {
 
 @media (prefers-color-scheme: dark) {
   .config {
-    background-color: #262626;
-    color: #f0f0f0;
+    background-color: var(--ts-bg);
+    color: var(--ts-text);
   }
 
   .config__nav {
-    border-right-color: rgba(255, 255, 255, 0.1);
+    border-right-color: var(--ts-line);
   }
 
   .config__nav-item:hover {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgba(98, 185, 235, 0.08);
   }
 
   .config__nav-item--active {
-    background-color: rgba(0, 145, 255, 0.2);
-    color: #6cb8ff;
+    background-color: rgba(98, 185, 235, 0.16);
+    color: var(--ts-primary-text);
   }
 
   .entry-item,
   .btn,
   .entry-form__input,
   .entry-preview,
-  .form-section {
-    background-color: #333;
-    border-color: rgba(255, 255, 255, 0.12);
+  .form-section,
+  .ctx-menu,
+  .modal {
+    background-color: var(--ts-surface);
+    border-color: var(--ts-line);
   }
 
   .entry-form__footer {
-    border-top-color: rgba(255, 255, 255, 0.1);
+    border-top-color: var(--ts-line);
   }
 
-  .modal {
-    background-color: #333;
-  }
-
-  .ctx-menu {
-    background-color: #3a3a3a;
-    border-color: rgba(255, 255, 255, 0.14);
-  }
-
-  .ctx-menu__item:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-  }
-
-  .btn--danger-solid {
-    background-color: #d64545;
-    border-color: #d64545;
-    color: #fff;
-  }
-
-  .btn--primary {
-    background-color: #0067c0;
-    border-color: #0067c0;
-    color: #fff;
-  }
-
-  .entry-form__color--active {
-    border-color: rgba(255, 255, 255, 0.7);
+  .config__nav-item--active .config__nav-icon {
+    opacity: 1;
   }
 }
 </style>

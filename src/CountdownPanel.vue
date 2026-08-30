@@ -159,11 +159,11 @@ onUnmounted(() => clearInterval(ticker));
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #f6f6f6;
-  color: #1a1a1a;
+  background-color: var(--ts-bg);
+  color: var(--ts-text);
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--ts-line);
 }
 
 .panel__header {
@@ -171,7 +171,7 @@ onUnmounted(() => clearInterval(ticker));
   align-items: baseline;
   justify-content: space-between;
   padding: 14px 16px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--ts-line);
 }
 
 .panel__date {
@@ -232,7 +232,7 @@ onUnmounted(() => clearInterval(ticker));
 
 .panel-item:hover,
 .panel-item--expanded {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: rgba(42, 156, 219, 0.07);
 }
 
 .panel-item__detail {
@@ -259,7 +259,7 @@ onUnmounted(() => clearInterval(ticker));
   border: none;
   background: none;
   font-size: 12px;
-  color: #0067c0;
+  color: var(--ts-primary-text);
   cursor: pointer;
   padding: 0;
 }
@@ -272,7 +272,7 @@ onUnmounted(() => clearInterval(ticker));
   border: none;
   background: none;
   font-size: 13px;
-  color: #0067c0;
+  color: var(--ts-primary-text);
   cursor: pointer;
   padding: 8px 0;
 }
@@ -282,7 +282,7 @@ onUnmounted(() => clearInterval(ticker));
 }
 
 .panel__add--footer {
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid var(--ts-line);
   flex-shrink: 0;
 }
 
@@ -312,27 +312,18 @@ onUnmounted(() => clearInterval(ticker));
 
 @media (prefers-color-scheme: dark) {
   .panel {
-    background-color: #2b2b2b;
-    color: #f0f0f0;
-    border-color: rgba(255, 255, 255, 0.14);
+    background-color: var(--ts-bg);
+    color: var(--ts-text);
+    border-color: var(--ts-line);
   }
 
   .panel__header {
-    border-bottom-color: rgba(255, 255, 255, 0.1);
+    border-bottom-color: var(--ts-line);
   }
 
   .panel-item:hover,
   .panel-item--expanded {
-    background-color: rgba(255, 255, 255, 0.06);
-  }
-
-  .panel-item__detail-edit,
-  .panel__add {
-    color: #6cb8ff;
-  }
-
-  .panel__add--footer {
-    border-top-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(98, 185, 235, 0.08);
   }
 }
 </style>

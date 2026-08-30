@@ -30,7 +30,7 @@ defineEmits<{ (e: 'update:modelValue', value: string): void }>();
   gap: 2px;
   padding: 2px;
   border-radius: 8px;
-  background-color: rgba(0, 0, 0, 0.06);
+  background-color: rgba(23, 35, 45, 0.06);
 }
 
 .seg__item {
@@ -49,9 +49,9 @@ defineEmits<{ (e: 'update:modelValue', value: string): void }>();
 }
 
 .seg__item--active {
-  background-color: #fff;
+  background-color: var(--ts-surface);
   font-weight: 500;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 1px 3px rgba(23, 35, 45, 0.14);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -60,7 +60,7 @@ defineEmits<{ (e: 'update:modelValue', value: string): void }>();
   }
 
   .seg__item--active {
-    background-color: #5a5a5a;
+    background-color: #2c3d49;
   }
 }
 </style>

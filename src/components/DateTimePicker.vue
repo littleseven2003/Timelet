@@ -282,9 +282,9 @@ function setNow() {
 
 <style scoped>
 .picker {
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--ts-line);
   border-radius: 10px;
-  background-color: #fff;
+  background-color: var(--ts-surface);
   padding: 12px;
   width: 100%;
 }
@@ -310,15 +310,15 @@ function setNow() {
 }
 
 .picker__chip:hover {
-  background-color: rgba(0, 145, 255, 0.08);
-  border-color: rgba(0, 145, 255, 0.4);
+  background-color: rgba(42, 156, 219, 0.08);
+  border-color: rgba(42, 156, 219, 0.45);
 }
 
 .picker__now {
   border: none;
   background: none;
   font-size: 12px;
-  color: #0067c0;
+  color: var(--ts-primary-text);
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 6px;
@@ -326,7 +326,7 @@ function setNow() {
 }
 
 .picker__now:hover {
-  background-color: rgba(0, 145, 255, 0.08);
+  background-color: rgba(42, 156, 219, 0.08);
 }
 
 .picker__header {
@@ -393,12 +393,12 @@ function setNow() {
 }
 
 .picker__day--selected {
-  background-color: #0067c0;
+  background-color: var(--ts-primary);
   color: #fff;
 }
 
 .picker__day--selected:hover {
-  background-color: #0072d4;
+  filter: brightness(1.08);
 }
 
 .picker__time {
@@ -407,15 +407,15 @@ function setNow() {
   gap: 6px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid var(--ts-line);
 }
 
 .tstep {
   display: flex;
   align-items: stretch;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--ts-line);
   border-radius: 6px;
-  background-color: #fff;
+  background-color: var(--ts-surface);
   overflow: hidden;
 }
 
@@ -439,7 +439,7 @@ function setNow() {
 .tstep__btns {
   display: flex;
   flex-direction: column;
-  border-left: 1px solid rgba(0, 0, 0, 0.08);
+  border-left: 1px solid var(--ts-line);
 }
 
 .tstep__btn {
@@ -456,7 +456,7 @@ function setNow() {
 
 .tstep__btn:hover {
   opacity: 1;
-  background-color: rgba(0, 145, 255, 0.1);
+  background-color: rgba(42, 156, 219, 0.1);
 }
 
 .picker__colon {
@@ -465,17 +465,17 @@ function setNow() {
 
 @media (prefers-color-scheme: dark) {
   .picker {
-    background-color: #333;
-    border-color: rgba(255, 255, 255, 0.12);
+    background-color: var(--ts-surface);
+    border-color: var(--ts-line);
   }
 
   .picker__chip {
-    border-color: rgba(255, 255, 255, 0.14);
+    border-color: var(--ts-line);
   }
 
   .picker__chip:hover {
-    background-color: rgba(0, 145, 255, 0.16);
-    border-color: rgba(108, 184, 255, 0.5);
+    background-color: rgba(98, 185, 235, 0.1);
+    border-color: rgba(98, 185, 235, 0.5);
   }
 
   .picker__nav:hover {
@@ -487,28 +487,28 @@ function setNow() {
   }
 
   .picker__day--selected {
-    background-color: #0067c0;
+    background-color: var(--ts-primary);
   }
 
   .picker__time {
-    border-top-color: rgba(255, 255, 255, 0.1);
+    border-top-color: var(--ts-line);
   }
 
   .tstep {
-    background-color: #2b2b2b;
-    border-color: rgba(255, 255, 255, 0.12);
+    background-color: var(--ts-bg);
+    border-color: var(--ts-line);
   }
 
   .tstep__btns {
-    border-left-color: rgba(255, 255, 255, 0.1);
+    border-left-color: var(--ts-line);
   }
 
   .picker__now {
-    color: #6cb8ff;
+    color: var(--ts-primary-text);
   }
 
   .picker__now:hover {
-    background-color: rgba(0, 145, 255, 0.16);
+    background-color: rgba(98, 185, 235, 0.1);
   }
 }
 </style>

@@ -105,15 +105,15 @@ async function toggleShowExpired(enabled: boolean) {
 }
 
 .settings-card {
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ts-line);
   border-radius: 10px;
-  background-color: #fff;
+  background-color: var(--ts-surface);
   padding: 4px 16px;
 }
 
 .settings-card__divider {
   height: 1px;
-  background-color: rgba(0, 0, 0, 0.06);
+  background-color: var(--ts-line);
 }
 
 .settings-row {
@@ -143,7 +143,7 @@ async function toggleShowExpired(enabled: boolean) {
 
 .settings-row__error {
   font-size: 12px;
-  color: #d33;
+  color: var(--ts-coral);
 }
 
 .settings-switch {
@@ -171,7 +171,7 @@ async function toggleShowExpired(enabled: boolean) {
 }
 
 .settings-switch:checked {
-  background-color: #0067c0;
+  background-color: var(--ts-primary);
 }
 
 .settings-switch:checked::after {
@@ -180,12 +180,8 @@ async function toggleShowExpired(enabled: boolean) {
 
 @media (prefers-color-scheme: dark) {
   .settings-card {
-    background-color: #333;
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-
-  .settings-card__divider {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: var(--ts-surface);
+    border-color: var(--ts-line);
   }
 
   .settings-switch {
@@ -193,7 +189,7 @@ async function toggleShowExpired(enabled: boolean) {
   }
 
   .settings-switch:checked {
-    background-color: #0067c0;
+    background-color: var(--ts-primary);
   }
 }
 </style>

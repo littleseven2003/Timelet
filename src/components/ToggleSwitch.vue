@@ -40,7 +40,7 @@ defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
 }
 
 .toggle:checked {
-  background-color: #0067c0;
+  background-color: var(--ts-primary);
 }
 
 .toggle:checked::after {
@@ -53,7 +53,7 @@ defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
   }
 
   .toggle:checked {
-    background-color: #0067c0;
+    background-color: var(--ts-primary);
   }
 }
 </style>
