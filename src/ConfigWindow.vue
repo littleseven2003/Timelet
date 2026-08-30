@@ -462,9 +462,7 @@ onMounted(async () => {
               @dragover.prevent
               @drop.prevent="onDrop"
               @dragend="onDragEnd"
-              @contextmenu.prevent="
-                openCtxMenu($event, entry)
-              "
+              @contextmenu.prevent="openCtxMenu($event, entry)"
             >
               <span class="entry-item__color" :style="{ backgroundColor: entry.color }" />
               <div class="entry-item__info">
