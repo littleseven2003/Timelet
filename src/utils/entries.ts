@@ -84,6 +84,15 @@ export function entryUnitValue(entry: Entry, unit: DisplayUnit): number | null {
   return unit === 'month' ? months : Math.trunc(months / 12);
 }
 
+// 大数字预览用：返回当前展示单位的数值与单位（带时刻条目返回 null 走文本展示）
+export function entryDisplayValue(
+  entry: Entry,
+): { value: number; unit: DisplayUnit } | null {
+  const unit = entry.displayUnit ?? 'day';
+  const value = entryUnitValue(entry, unit);
+  return value == null ? null : { value, unit };
+}
+
 // 是否为已过期的倒计时条目（带时刻按时刻判定，纯日期按自然日判定；循环条目永不过期）
 export function isExpiredCountdown(entry: Entry, nowMs: number = Date.now()): boolean {
   if (entry.entryType !== 'countdown') return false;

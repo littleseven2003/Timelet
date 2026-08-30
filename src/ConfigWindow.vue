@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { DisplayUnit, Entry } from './types/entry';
 import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
-import { formatEntryText, sortEntries } from './utils/entries';
+import { entryDisplayValue, formatEntryText, sortEntries } from './utils/entries';
 import DateTimePicker from './components/DateTimePicker.vue';
 import SettingsSection from './components/SettingsSection.vue';
 
@@ -29,6 +29,26 @@ const canSave = computed(() => !!editing.value?.name && !!editing.value?.date);
 const previewText = computed(() => {
   if (!editing.value) return '';
   return formatEntryText(editing.value, Date.now(), (key, params) => t(key, params ?? {}));
+});
+
+// 大数字预览：纯日期条目返回数值与单位，带时刻条目回退文本展示
+const previewValue = computed(() => {
+  if (!editing.value) return null;
+  return entryDisplayValue(editing.value);
+});
+
+// 大数字上方的状态小字
+const previewStatus = computed(() => {
+  const value = previewValue.value;
+  if (!value || !editing.value) return '';
+  if (editing.value.entryType === 'elapsed') return t('config.previewElapsed');
+  return value.value >= 0 ? t('config.previewLeft') : t('config.previewAgo');
+});
+
+// 新建/编辑时自动聚焦名称输入
+const nameInput = ref<HTMLInputElement | null>(null);
+watch(editing, (value) => {
+  if (value) void nextTick(() => nameInput.value?.focus());
 });
 
 // 拖拽排序：拖动过程用本地预览列表渲染，落点后一次性持久化
@@ -153,12 +173,22 @@ onMounted(async () => {
             {{ isNew ? t('config.addEntry') : t('config.editEntry') }}
           </h2>
 
-          <!-- 实时预览：与面板条目样式一致 -->
+          <!-- 实时预览：大数字 + 状态小字（带时刻条目回退文本） -->
           <div class="entry-preview">
             <span class="entry-preview__color" :style="{ backgroundColor: editing.color }" />
-            <span class="entry-preview__name">{{ editing.name || t('config.previewName') }}</span>
-            <span class="entry-preview__days" :style="{ color: editing.color }">
-              {{ previewText || t('config.previewDays') }}
+            <div class="entry-preview__main">
+              <span class="entry-preview__name">{{ editing.name || t('config.previewName') }}</span>
+              <span v-if="previewText" class="entry-preview__date">{{ previewText }}</span>
+            </div>
+            <div v-if="previewValue" class="entry-preview__big" :style="{ color: editing.color }">
+              <span class="entry-preview__status">{{ previewStatus }}</span>
+              <span class="entry-preview__number">
+                {{ Math.abs(previewValue.value) }}
+                <small>{{ t(`config.unit.${previewValue.unit}`) }}</small>
+              </span>
+            </div>
+            <span v-else class="entry-preview__days" :style="{ color: editing.color }">
+              {{ t('config.previewDays') }}
             </span>
           </div>
 
@@ -222,13 +252,14 @@ onMounted(async () => {
             <div class="entry-form__side">
               <section class="form-section">
                 <h3 class="form-section__title">{{ t('config.sectionBasic') }}</h3>
-                <input
-                  v-model="editing.name"
-                  class="entry-form__input entry-form__input--hero"
-                  type="text"
-                  :placeholder="t('config.namePlaceholder')"
-                  maxlength="30"
-                />
+              <input
+                ref="nameInput"
+                v-model="editing.name"
+                class="entry-form__input entry-form__input--hero"
+                type="text"
+                :placeholder="t('config.namePlaceholder')"
+                maxlength="30"
+              />
                 <div class="entry-form__options">
                   <button
                     type="button"
@@ -335,6 +366,9 @@ onMounted(async () => {
                   · {{ entry.date }}
                 </span>
               </div>
+              <span class="entry-item__days" :style="{ color: entry.color }">
+                {{ formatEntryText(entry, Date.now(), (key, params) => t(key, params ?? {})) }}
+              </span>
               <div class="entry-item__actions">
                 <button class="btn btn--small" type="button" @click="openEdit(entry)">
                   {{ t('config.edit') }}
@@ -635,6 +669,53 @@ onMounted(async () => {
 
 .entry-preview__days {
   font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.entry-preview__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.entry-preview__date {
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+/* 大数字预览（LikeDay 风格） */
+.entry-preview__big {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+}
+
+.entry-preview__status {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.entry-preview__number {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.entry-preview__number small {
+  font-size: 13px;
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+.entry-item__days {
+  font-size: 13px;
   font-weight: 600;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
