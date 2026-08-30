@@ -43,6 +43,11 @@ function daysText(entry: Entry): string {
   return formatEntryText(entry, now.value, t);
 }
 
+// 已过期条目使用到期珊瑚色（设计语言 6.4），不再沿用条目自选色
+function daysColor(entry: Entry): string {
+  return isExpiredCountdown(entry, now.value) ? 'var(--ts-coral)' : entry.color;
+}
+
 // 右键唤起原生菜单：条目上传入 id（编辑详情/打开主界面），空白处仅打开主界面
 function showContextMenu(entryId: string | null) {
   invoke('show_panel_menu', { entryId }).catch(() => {
@@ -112,9 +117,25 @@ onUnmounted(() => clearInterval(ticker));
     </header>
 
     <div v-if="loaded && sorted.length === 0" class="panel__empty">
+      <!-- 极简水面与小岛轮廓（设计语言 5.6），不做成场景插画 -->
+      <svg class="panel__empty-art" viewBox="0 0 120 44" fill="none" aria-hidden="true">
+        <path
+          d="M40 32 Q60 10 80 32"
+          stroke="var(--ts-primary)"
+          stroke-width="2"
+          stroke-linecap="round"
+          opacity="0.55"
+        />
+        <path
+          d="M6 33 Q34 29 60 33 T114 33"
+          stroke="var(--ts-line)"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+      </svg>
       <p class="panel__empty-title">{{ t('panel.emptyTitle') }}</p>
       <button class="panel__add" type="button" @click="openCreate">
-        {{ t('panel.addEntry') }}
+        {{ t('panel.createFirst') }}
       </button>
     </div>
 
@@ -131,7 +152,7 @@ onUnmounted(() => clearInterval(ticker));
           <div class="panel-item__row">
             <span class="panel-item__color" :style="{ backgroundColor: entry.color }" />
             <span class="panel-item__name" :title="entryTitle(entry)">{{ entry.name }}</span>
-            <span class="panel-item__days" :style="{ color: entry.color }">
+            <span class="panel-item__days" :style="{ color: daysColor(entry) }">
               {{ daysText(entry) }}
             </span>
           </div>
@@ -156,6 +177,7 @@ onUnmounted(() => clearInterval(ticker));
 
 <style scoped>
 .panel {
+  animation: panel-in 0.18s ease-out;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -190,9 +212,15 @@ onUnmounted(() => clearInterval(ticker));
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   padding: 24px;
   text-align: center;
+}
+
+.panel__empty-art {
+  width: 120px;
+  height: 44px;
+  margin-bottom: 4px;
 }
 
 .panel__empty-title {
@@ -308,6 +336,24 @@ onUnmounted(() => clearInterval(ticker));
   font-weight: 600;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    animation: none;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

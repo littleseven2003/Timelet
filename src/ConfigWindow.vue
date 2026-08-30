@@ -75,6 +75,18 @@ const isCustomColor = computed(
   () => editing.value != null && !(ENTRY_COLORS as readonly string[]).includes(editing.value.color),
 );
 
+// 切换类型时，若仍在对应类型的默认色上则同步切换（倒计时=时屿蓝，正计时=累积岛绿）
+const TYPE_DEFAULT_COLOR = { countdown: '#2a9cdb', elapsed: '#368e76' } as const;
+
+function onTypeChange(next: 'countdown' | 'elapsed') {
+  if (!editing.value) return;
+  const previous = editing.value.entryType;
+  if (editing.value.color === TYPE_DEFAULT_COLOR[previous]) {
+    editing.value.color = TYPE_DEFAULT_COLOR[next];
+  }
+  editing.value.entryType = next;
+}
+
 // 分段控件选项集中定义
 const typeOptions = computed(() => [
   { value: 'countdown', label: t('config.typeCountdown') },
@@ -309,7 +321,7 @@ onMounted(async () => {
                 :model-value="editing.entryType"
                 :options="typeOptions"
                 class="form-row__seg"
-                @update:model-value="editing.entryType = $event as 'countdown' | 'elapsed'"
+                @update:model-value="onTypeChange($event as 'countdown' | 'elapsed')"
               />
             </div>
 
