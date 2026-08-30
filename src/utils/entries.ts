@@ -85,9 +85,7 @@ export function entryUnitValue(entry: Entry, unit: DisplayUnit): number | null {
 }
 
 // 大数字预览用：返回当前展示单位的数值与单位（带时刻条目返回 null 走文本展示）
-export function entryDisplayValue(
-  entry: Entry,
-): { value: number; unit: DisplayUnit } | null {
+export function entryDisplayValue(entry: Entry): { value: number; unit: DisplayUnit } | null {
   const unit = entry.displayUnit ?? 'day';
   const value = entryUnitValue(entry, unit);
   return value == null ? null : { value, unit };

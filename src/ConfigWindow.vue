@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -8,6 +8,8 @@ import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
 import { entryDisplayValue, formatEntryText, sortEntries } from './utils/entries';
 import DateTimePicker from './components/DateTimePicker.vue';
+import SegmentedControl from './components/SegmentedControl.vue';
+import ToggleSwitch from './components/ToggleSwitch.vue';
 import SettingsSection from './components/SettingsSection.vue';
 
 type NavKey = 'entries' | 'settings' | 'about';
@@ -55,6 +57,36 @@ watch(editing, (value) => {
 const isCustomColor = computed(
   () => editing.value != null && !(ENTRY_COLORS as readonly string[]).includes(editing.value.color),
 );
+
+// 分段控件选项集中定义
+const typeOptions = computed(() => [
+  { value: 'countdown', label: t('config.typeCountdown') },
+  { value: 'elapsed', label: t('config.typeElapsed') },
+]);
+const unitOptions = computed(() =>
+  (['day', 'week', 'month', 'year'] as DisplayUnit[]).map((unit) => ({
+    value: unit,
+    label: t(`config.unit.${unit}`),
+  })),
+);
+const repeatOptions = computed(() => [
+  { value: 'none', label: t('config.repeat.none') },
+  { value: 'daily', label: t('config.repeat.daily') },
+  { value: 'workday', label: t('config.repeat.workday') },
+]);
+
+// Esc：先关弹窗，再退出编辑态
+function onKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return;
+  if (deleteTarget.value) {
+    deleteTarget.value = null;
+  } else if (editing.value) {
+    cancelEdit();
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown));
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 
 // 拖拽排序：拖动过程用本地预览列表渲染，落点后一次性持久化
 const dragId = ref<string | null>(null);
@@ -158,13 +190,54 @@ onMounted(async () => {
   <div class="config">
     <nav class="config__nav">
       <button
-        v-for="key in (['entries', 'settings', 'about'] as NavKey[])"
+        v-for="key in ['entries', 'settings', 'about'] as NavKey[]"
         :key="key"
         class="config__nav-item"
         :class="{ 'config__nav-item--active': activeNav === key }"
         type="button"
         @click="activeNav = key"
       >
+        <svg
+          v-if="key === 'entries'"
+          class="config__nav-icon"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+        >
+          <path d="M5.5 4h8M5.5 8h8M5.5 12h8" />
+          <circle cx="2.5" cy="4" r="0.9" fill="currentColor" stroke="none" />
+          <circle cx="2.5" cy="8" r="0.9" fill="currentColor" stroke="none" />
+          <circle cx="2.5" cy="12" r="0.9" fill="currentColor" stroke="none" />
+        </svg>
+        <svg
+          v-else-if="key === 'settings'"
+          class="config__nav-icon"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+        >
+          <circle cx="8" cy="8" r="2.2" />
+          <path
+            d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6 11 5M5 11l-1.4 1.4"
+          />
+        </svg>
+        <svg
+          v-else
+          class="config__nav-icon"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M8 7.4v3.4" />
+          <circle cx="8" cy="5" r="0.9" fill="currentColor" stroke="none" />
+        </svg>
         {{ t(`config.nav.${key}`) }}
       </button>
     </nav>
@@ -174,9 +247,20 @@ onMounted(async () => {
       <template v-if="activeNav === 'entries'">
         <!-- 编辑表单 -->
         <form v-if="editing" class="entry-form" @submit.prevent="submit">
-          <h2 class="entry-form__title">
-            {{ isNew ? t('config.addEntry') : t('config.editEntry') }}
-          </h2>
+          <div class="entry-form__title-row">
+            <h2 class="entry-form__title">
+              {{ isNew ? t('config.addEntry') : t('config.editEntry') }}
+            </h2>
+            <!-- 危险操作与主操作分离：删除放在标题行右侧 -->
+            <button
+              v-if="!isNew"
+              class="entry-form__delete"
+              type="button"
+              @click="deleteTarget = editing"
+            >
+              {{ t('config.delete') }}
+            </button>
+          </div>
 
           <!-- 实时预览：大数字 + 状态小字（带时刻条目回退文本） -->
           <div class="entry-preview">
@@ -201,143 +285,126 @@ onMounted(async () => {
             <!-- 左列：日期时间组件作为视觉锚点独占 -->
             <section class="form-section form-section--time">
               <h3 class="form-section__title">{{ t('config.sectionTime') }}</h3>
-              <span class="entry-form__label">
-                {{ editing.entryType === 'countdown' ? t('config.targetDate') : t('config.startDate') }}
-              </span>
-              <DateTimePicker
-                :date="editing.date"
-                :time="editing.time ?? null"
-                :with-time="!!editing.time"
-                @update:date="editing.date = $event"
-                @update:time="editing.time = $event"
-              />
-              <label class="entry-form__toggle">
-                <input
-                  type="checkbox"
-                  :checked="!!editing.time"
-                  @change="toggleTime(($event.target as HTMLInputElement).checked)"
+              <div class="form-row form-row--column">
+                <span class="form-row__label">
+                  {{
+                    editing.entryType === 'countdown'
+                      ? t('config.targetDate')
+                      : t('config.startDate')
+                  }}
+                </span>
+                <DateTimePicker
+                  :date="editing.date"
+                  :time="editing.time ?? null"
+                  :with-time="!!editing.time"
+                  :past="editing.entryType === 'elapsed'"
+                  @update:date="editing.date = $event"
+                  @update:time="editing.time = $event"
                 />
-                <span>{{ t('config.includeTime') }}</span>
-              </label>
+              </div>
 
-              <template v-if="editing.time">
-                <span class="entry-form__label">{{ t('config.fieldRepeat') }}</span>
-                <div class="entry-form__options">
-                  <button
-                    v-for="rule in (['none', 'daily', 'workday'] as const)"
-                    :key="rule"
-                    type="button"
-                    class="entry-form__option"
-                    :class="{ 'entry-form__option--active': (editing.repeat ?? 'none') === rule }"
-                    @click="editing.repeat = rule === 'none' ? undefined : rule"
-                  >
-                    {{ t(`config.repeat.${rule}`) }}
-                  </button>
-                </div>
-              </template>
+              <div class="form-row">
+                <span class="form-row__label">{{ t('config.includeTime') }}</span>
+                <ToggleSwitch
+                  :model-value="!!editing.time"
+                  @update:model-value="toggleTime($event)"
+                />
+              </div>
 
-              <template v-if="!editing.time">
-                <span class="entry-form__label">{{ t('config.fieldUnit') }}</span>
-                <div class="entry-form__options">
-                  <button
-                    v-for="unit in (['day', 'week', 'month', 'year'] as DisplayUnit[])"
-                    :key="unit"
-                    type="button"
-                    class="entry-form__option"
-                    :class="{ 'entry-form__option--active': (editing.displayUnit ?? 'day') === unit }"
-                    @click="editing.displayUnit = unit"
-                  >
-                    {{ t(`config.unit.${unit}`) }}
-                  </button>
-                </div>
-              </template>
+              <div v-if="editing.time" class="form-row">
+                <span class="form-row__label">{{ t('config.fieldRepeat') }}</span>
+                <SegmentedControl
+                  :model-value="editing.repeat ?? 'none'"
+                  :options="repeatOptions"
+                  @update:model-value="
+                    editing.repeat = $event === 'none' ? undefined : ($event as 'daily' | 'workday')
+                  "
+                />
+              </div>
+
+              <div v-else class="form-row">
+                <span class="form-row__label">{{ t('config.fieldUnit') }}</span>
+                <SegmentedControl
+                  :model-value="editing.displayUnit ?? 'day'"
+                  :options="unitOptions"
+                  @update:model-value="editing.displayUnit = $event as DisplayUnit"
+                />
+              </div>
             </section>
 
             <!-- 右列：紧凑字段纵向排布，备注自动伸展补齐高度 -->
             <div class="entry-form__side">
               <section class="form-section">
                 <h3 class="form-section__title">{{ t('config.sectionBasic') }}</h3>
-              <input
-                ref="nameInput"
-                v-model="editing.name"
-                class="entry-form__input entry-form__input--hero"
-                type="text"
-                :placeholder="t('config.namePlaceholder')"
-                maxlength="30"
-              />
-                <div class="entry-form__options">
-                  <button
-                    type="button"
-                    class="entry-form__option"
-                    :class="{ 'entry-form__option--active': editing.entryType === 'countdown' }"
-                    @click="editing.entryType = 'countdown'"
-                  >
-                    {{ t('config.typeCountdown') }}
-                  </button>
-                  <button
-                    type="button"
-                    class="entry-form__option"
-                    :class="{ 'entry-form__option--active': editing.entryType === 'elapsed' }"
-                    @click="editing.entryType = 'elapsed'"
-                  >
-                    {{ t('config.typeElapsed') }}
-                  </button>
+                <input
+                  ref="nameInput"
+                  v-model="editing.name"
+                  class="entry-form__input entry-form__input--hero"
+                  type="text"
+                  :placeholder="t('config.namePlaceholder')"
+                  maxlength="30"
+                />
+                <div class="form-row">
+                  <span class="form-row__label">{{ t('config.fieldType') }}</span>
+                  <SegmentedControl
+                    :model-value="editing.entryType"
+                    :options="typeOptions"
+                    @update:model-value="editing.entryType = $event as 'countdown' | 'elapsed'"
+                  />
                 </div>
               </section>
 
               <section class="form-section form-section--appearance">
                 <h3 class="form-section__title">{{ t('config.sectionAppearance') }}</h3>
-                <span class="entry-form__label">{{ t('config.fieldColor') }}</span>
-                <div class="entry-form__colors">
-                  <button
-                    v-for="color in ENTRY_COLORS"
-                    :key="color"
-                    type="button"
-                    class="entry-form__color"
-                    :class="{ 'entry-form__color--active': editing.color === color }"
-                    :style="{ backgroundColor: color }"
-                    :aria-label="color"
-                    @click="editing.color = color"
-                  />
-                  <!-- 自定义取色：色板外的颜色命中此项 -->
-                  <label
-                    class="entry-form__color entry-form__color--custom"
-                    :class="{ 'entry-form__color--active': isCustomColor }"
-                    :style="{ backgroundColor: editing.color }"
-                    :title="t('config.customColor')"
-                  >
-                    <input
-                      type="color"
-                      :value="editing.color"
-                      @input="editing.color = ($event.target as HTMLInputElement).value"
+                <div class="form-row form-row--column">
+                  <span class="form-row__label">{{ t('config.fieldColor') }}</span>
+                  <div class="entry-form__colors">
+                    <button
+                      v-for="color in ENTRY_COLORS"
+                      :key="color"
+                      type="button"
+                      class="entry-form__color"
+                      :class="{ 'entry-form__color--active': editing.color === color }"
+                      :style="{ backgroundColor: color }"
+                      :aria-label="color"
+                      @click="editing.color = color"
                     />
-                  </label>
+                    <!-- 自定义取色：色板外的颜色命中此项 -->
+                    <label
+                      class="entry-form__color entry-form__color--custom"
+                      :class="{ 'entry-form__color--active': isCustomColor }"
+                      :style="{ backgroundColor: editing.color }"
+                      :title="t('config.customColor')"
+                    >
+                      <input
+                        type="color"
+                        :value="editing.color"
+                        @input="editing.color = ($event.target as HTMLInputElement).value"
+                      />
+                    </label>
+                  </div>
                 </div>
-                <label class="entry-form__toggle">
-                  <input v-model="editing.pinned" type="checkbox" />
-                  <span>{{ t('config.fieldPinned') }}（{{ editing.pinned ? t('config.pinnedOn') : t('config.pinnedOff') }}）</span>
-                </label>
-                <span class="entry-form__label">{{ t('config.fieldNote') }}</span>
-                <textarea
-                  v-model="editing.note"
-                  class="entry-form__input entry-form__note"
-                  :placeholder="t('config.notePlaceholder')"
-                  maxlength="100"
-                />
+                <div class="form-row">
+                  <span class="form-row__label">{{ t('config.fieldPinned') }}</span>
+                  <ToggleSwitch v-model="editing.pinned" />
+                </div>
+                <div class="form-row form-row--column form-row--grow">
+                  <span class="form-row__label">{{ t('config.fieldNote') }}</span>
+                  <textarea
+                    v-model="editing.note"
+                    class="entry-form__input entry-form__note"
+                    :placeholder="t('config.notePlaceholder')"
+                    maxlength="100"
+                  />
+                </div>
               </section>
             </div>
           </div>
 
           <div class="entry-form__footer">
-            <button
-              v-if="!isNew"
-              class="btn btn--danger"
-              type="button"
-              @click="deleteTarget = editing"
-            >
-              {{ t('config.delete') }}
-            </button>
-            <span class="entry-form__spacer" />
+            <span class="entry-form__helper" :class="{ 'entry-form__helper--active': !canSave }">
+              {{ canSave ? '' : t('config.saveHint') }}
+            </span>
             <button class="btn" type="button" @click="cancelEdit">
               {{ t('config.cancel') }}
             </button>
@@ -377,10 +444,16 @@ onMounted(async () => {
               <div class="entry-item__info">
                 <span class="entry-item__name">
                   {{ entry.name }}
-                  <span v-if="entry.pinned" class="entry-item__pin">{{ t('config.pinnedTag') }}</span>
+                  <span v-if="entry.pinned" class="entry-item__pin">{{
+                    t('config.pinnedTag')
+                  }}</span>
                 </span>
                 <span class="entry-item__meta">
-                  {{ entry.entryType === 'countdown' ? t('config.typeCountdown') : t('config.typeElapsed') }}
+                  {{
+                    entry.entryType === 'countdown'
+                      ? t('config.typeCountdown')
+                      : t('config.typeElapsed')
+                  }}
                   · {{ entry.date }}
                 </span>
               </div>
@@ -461,6 +534,16 @@ onMounted(async () => {
   font-size: 13px;
   cursor: pointer;
   color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config__nav-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  opacity: 0.75;
 }
 
 .config__nav-item:hover {
@@ -486,6 +569,27 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.entry-form__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 危险操作：幽灵样式与主操作区分离 */
+.entry-form__delete {
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: #d33;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.entry-form__delete:hover {
+  background-color: rgba(214, 69, 69, 0.08);
 }
 
 .entry-list__title,
@@ -555,6 +659,14 @@ onMounted(async () => {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  /* 桌面惯例：操作按钮悬停浮现，降低行内噪音（键盘 focus 时同样可见） */
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+.entry-item:hover .entry-item__actions,
+.entry-item:focus-within .entry-item__actions {
+  opacity: 1;
 }
 
 .entry-list__empty {
@@ -806,13 +918,43 @@ onMounted(async () => {
 .entry-form__footer {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.entry-form__spacer {
+/* 保存前置提示：名称或日期未完成时说明原因 */
+.entry-form__helper {
   flex: 1;
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+.entry-form__helper--active {
+  opacity: 0.85;
+  color: #b8860b;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.form-row--column {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.form-row--grow {
+  flex: 1;
+}
+
+.form-row__label {
+  font-size: 13px;
+  opacity: 0.7;
 }
 
 .entry-form__field {
@@ -833,16 +975,6 @@ onMounted(async () => {
   opacity: 0.7;
 }
 
-.entry-form__include-time,
-.entry-form__toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  margin-top: 2px;
-  cursor: pointer;
-}
-
 .entry-form__input {
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 6px;
@@ -850,28 +982,6 @@ onMounted(async () => {
   font-size: 13px;
   background-color: #fff;
   color: inherit;
-}
-
-.entry-form__options {
-  display: flex;
-  gap: 8px;
-}
-
-.entry-form__option {
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: #fff;
-  border-radius: 6px;
-  padding: 6px 16px;
-  font-size: 13px;
-  cursor: pointer;
-  color: inherit;
-}
-
-.entry-form__option--active {
-  border-color: #0067c0;
-  color: #0067c0;
-  background-color: rgba(0, 145, 255, 0.08);
-  font-weight: 500;
 }
 
 .entry-form__colors {
@@ -941,7 +1051,6 @@ onMounted(async () => {
   .entry-item,
   .btn,
   .entry-form__input,
-  .entry-form__option,
   .entry-preview,
   .form-section {
     background-color: #333;
@@ -966,11 +1075,6 @@ onMounted(async () => {
     background-color: #0067c0;
     border-color: #0067c0;
     color: #fff;
-  }
-
-  .entry-form__option--active {
-    color: #6cb8ff;
-    border-color: #6cb8ff;
   }
 
   .entry-form__color--active {

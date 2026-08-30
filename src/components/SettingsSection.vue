@@ -60,7 +60,9 @@ async function toggleShowExpired(enabled: boolean) {
         <div class="settings-row__text">
           <span class="settings-row__label">{{ t('settings.launchAtLogin') }}</span>
           <span class="settings-row__desc">{{ t('settings.launchAtLoginDesc') }}</span>
-          <span v-if="launchError" class="settings-row__error">{{ t('settings.launchError') }}</span>
+          <span v-if="launchError" class="settings-row__error">{{
+            t('settings.launchError')
+          }}</span>
         </div>
         <input
           type="checkbox"

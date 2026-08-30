@@ -1,11 +1,11 @@
 {
-  "images" : [
-    { "filename" : "timelet-thumbnail.png", "idiom" : "universal", "scale" : "1x" },
-    { "filename" : "timelet-thumbnail@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "timelet-thumbnail@3x.png", "idiom" : "universal", "scale" : "3x" }
+  "images": [
+    { "filename": "timelet-thumbnail.png", "idiom": "universal", "scale": "1x" },
+    { "filename": "timelet-thumbnail@2x.png", "idiom": "universal", "scale": "2x" },
+    { "filename": "timelet-thumbnail@3x.png", "idiom": "universal", "scale": "3x" }
   ],
-  "info" : {
-    "author" : "xcode",
-    "version" : 1
+  "info": {
+    "author": "xcode",
+    "version": 1
   }
 }
