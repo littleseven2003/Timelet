@@ -287,9 +287,10 @@ onUnmounted(() => clearInterval(ticker));
 }
 
 .panel-item__color {
-  width: 4px;
+  width: 5px;
   height: 26px;
-  border-radius: 2px;
+  /* 岛屿弧形签名造型 */
+  border-radius: 2px 2px 45% 45% / 2px 2px 30% 30%;
   flex-shrink: 0;
 }
 

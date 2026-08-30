@@ -254,6 +254,7 @@ onMounted(async () => {
         </svg>
         {{ t(`config.nav.${key}`) }}
       </button>
+      <div class="config__nav-brand">时屿 · Timelet</div>
     </nav>
 
     <main class="config__main">
@@ -600,6 +601,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 4px;
   border-right: 1px solid rgba(0, 0, 0, 0.08);
+  min-height: 100vh;
 }
 
 .config__nav-item {
@@ -621,6 +623,14 @@ onMounted(async () => {
   height: 15px;
   flex-shrink: 0;
   opacity: 0.75;
+}
+
+.config__nav-brand {
+  margin-top: auto;
+  padding: 10px 12px 2px;
+  font-size: 11px;
+  opacity: 0.4;
+  white-space: nowrap;
 }
 
 .config__nav-item:hover {
@@ -704,7 +714,8 @@ onMounted(async () => {
 .entry-item__color {
   width: 10px;
   height: 32px;
-  border-radius: 3px;
+  /* 签名造型：底部圆弧的「岛屿」色条，呼应产品图标意象 */
+  border-radius: 3px 3px 45% 45% / 3px 3px 30% 30%;
   flex-shrink: 0;
 }
 
@@ -896,9 +907,10 @@ onMounted(async () => {
 }
 
 .entry-preview__color {
-  width: 4px;
+  width: 5px;
   height: 28px;
-  border-radius: 2px;
+  /* 岛屿弧形签名造型 */
+  border-radius: 2px 2px 45% 45% / 2px 2px 30% 30%;
   flex-shrink: 0;
 }
 
