@@ -282,6 +282,17 @@ onMounted(async () => {
           </div>
 
           <div class="entry-form__body">
+            <!-- 类型是影响左右两栏语义的总开关，通栏置顶 -->
+            <div class="form-row form-row--type">
+              <span class="form-row__label">{{ t('config.fieldType') }}</span>
+              <SegmentedControl
+                :model-value="editing.entryType"
+                :options="typeOptions"
+                class="form-row__seg"
+                @update:model-value="editing.entryType = $event as 'countdown' | 'elapsed'"
+              />
+            </div>
+
             <!-- 左列：日期时间组件作为视觉锚点独占 -->
             <section class="form-section form-section--time">
               <h3 class="form-section__title">{{ t('config.sectionTime') }}</h3>
@@ -344,14 +355,6 @@ onMounted(async () => {
                   :placeholder="t('config.namePlaceholder')"
                   maxlength="30"
                 />
-                <div class="form-row">
-                  <span class="form-row__label">{{ t('config.fieldType') }}</span>
-                  <SegmentedControl
-                    :model-value="editing.entryType"
-                    :options="typeOptions"
-                    @update:model-value="editing.entryType = $event as 'countdown' | 'elapsed'"
-                  />
-                </div>
               </section>
 
               <section class="form-section form-section--appearance">
@@ -851,12 +854,13 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
 }
 
-/* 双栏网格：预览通栏 → 左侧日历锚点 + 右侧紧凑字段列 */
+/* 双栏网格：预览与类型通栏 → 左侧日历锚点 + 右侧紧凑字段列 */
 .entry-form__body {
   display: grid;
   grid-template-columns: 300px 1fr;
   grid-template-areas:
     'preview preview'
+    'type type'
     'time side';
   gap: 12px;
   align-items: stretch;
@@ -864,6 +868,15 @@ onMounted(async () => {
 
 .entry-preview {
   grid-area: preview;
+}
+
+.form-row--type {
+  grid-area: type;
+}
+
+.form-row--type .form-row__seg {
+  flex: 1;
+  max-width: 340px;
 }
 
 .form-section--time {
