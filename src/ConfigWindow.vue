@@ -51,6 +51,11 @@ watch(editing, (value) => {
   if (value) void nextTick(() => nameInput.value?.focus());
 });
 
+// 当前颜色不在预设色板中时高亮自定义取色块
+const isCustomColor = computed(
+  () => editing.value != null && !(ENTRY_COLORS as readonly string[]).includes(editing.value.color),
+);
+
 // 拖拽排序：拖动过程用本地预览列表渲染，落点后一次性持久化
 const dragId = ref<string | null>(null);
 const previewList = ref<Entry[] | null>(null);
@@ -294,6 +299,19 @@ onMounted(async () => {
                     :aria-label="color"
                     @click="editing.color = color"
                   />
+                  <!-- 自定义取色：色板外的颜色命中此项 -->
+                  <label
+                    class="entry-form__color entry-form__color--custom"
+                    :class="{ 'entry-form__color--active': isCustomColor }"
+                    :style="{ backgroundColor: editing.color }"
+                    :title="t('config.customColor')"
+                  >
+                    <input
+                      type="color"
+                      :value="editing.color"
+                      @input="editing.color = ($event.target as HTMLInputElement).value"
+                    />
+                  </label>
                 </div>
                 <label class="entry-form__toggle">
                   <input v-model="editing.pinned" type="checkbox" />
@@ -872,6 +890,19 @@ onMounted(async () => {
 
 .entry-form__color--active {
   border-color: rgba(0, 0, 0, 0.5);
+}
+
+/* 自定义取色块：虚线描边示意可自定义，内嵌隐藏的原生取色控件 */
+.entry-form__color--custom {
+  position: relative;
+  border-style: dashed;
+}
+
+.entry-form__color--custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .entry-form__actions {
