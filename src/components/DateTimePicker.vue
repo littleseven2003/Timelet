@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 // 自研日期（可选时刻）选择器，替代原生控件；不引入第三方依赖
@@ -103,10 +103,6 @@ function applyQuick(offset: number) {
   emit('update:date', toIso(date));
 }
 
-const hourOptions = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-// 分钟按 5 分钟步进，减少长列表滚动
-const minuteOptions = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
-
 const hour = computed(() => (props.time ?? '09:00').split(':')[0]!);
 const minute = computed(() => (props.time ?? '09:00').split(':')[1]!);
 
@@ -114,6 +110,50 @@ function updateTime(part: 'hour' | 'minute', value: string) {
   const next = part === 'hour' ? `${value}:${minute.value}` : `${hour.value}:${value}`;
   emit('update:time', next);
 }
+
+// 步进调节：时 0-23、分 0-59 循环，支持逐分钟
+function step(part: 'hour' | 'minute', delta: number) {
+  const max = part === 'hour' ? 24 : 60;
+  const raw = Number((props.time ?? '09:00').split(':')[part === 'hour' ? 0 : 1]);
+  const current = Number.isNaN(raw) ? 0 : raw;
+  const next = String((current + delta + max) % max).padStart(2, '0');
+  updateTime(part, next);
+}
+
+// 滚轮调节：向上增、向下减
+function onWheel(part: 'hour' | 'minute', event: WheelEvent) {
+  step(part, event.deltaY < 0 ? 1 : -1);
+}
+
+// 键入提交：超出范围时收敛到合法值
+function commit(part: 'hour' | 'minute', raw: string) {
+  const max = part === 'hour' ? 23 : 59;
+  const parsed = Math.floor(Number(raw));
+  const value = String(Math.min(max, Math.max(0, Number.isNaN(parsed) ? 0 : parsed))).padStart(
+    2,
+    '0',
+  );
+  updateTime(part, value);
+}
+
+// 按住 ▲▼ 连发：400ms 延迟后以 110ms 间隔重复
+let holdDelay: ReturnType<typeof setTimeout> | undefined;
+let holdTimer: ReturnType<typeof setInterval> | undefined;
+
+function startHold(stepFn: () => void) {
+  stepFn();
+  holdDelay = setTimeout(() => {
+    holdTimer = setInterval(stepFn, 110);
+  }, 400);
+  window.addEventListener('pointerup', stopHold, { once: true });
+}
+
+function stopHold() {
+  clearTimeout(holdDelay);
+  clearInterval(holdTimer);
+}
+
+onBeforeUnmount(stopHold);
 
 // 时刻设为当前时间（取整到 5 分钟）
 function setNow() {
@@ -170,25 +210,69 @@ function setNow() {
     </div>
 
     <div v-if="withTime" class="picker__time">
-      <select
-        class="picker__select"
-        :value="hour"
-        :aria-label="t('config.hourLabel')"
-        @change="updateTime('hour', ($event.target as HTMLSelectElement).value)"
-      >
-        <option v-for="option in hourOptions" :key="option" :value="option">{{ option }} 时</option>
-      </select>
+      <!-- 步进器：键入 / 滚轮 / 按住 ▲▼ 连发，三种路径都能逐分钟调节 -->
+      <div class="tstep">
+        <input
+          class="tstep__value"
+          type="text"
+          inputmode="numeric"
+          :value="hour"
+          :aria-label="t('config.hourLabel')"
+          @change="commit('hour', ($event.target as HTMLInputElement).value)"
+          @wheel.prevent="onWheel('hour', $event)"
+        />
+        <div class="tstep__btns">
+          <button
+            class="tstep__btn"
+            type="button"
+            :aria-label="t('config.hourLabel') + ' +1'"
+            @pointerdown="startHold(() => step('hour', 1))"
+          >
+            ▲
+          </button>
+          <button
+            class="tstep__btn"
+            type="button"
+            :aria-label="t('config.hourLabel') + ' -1'"
+            @pointerdown="startHold(() => step('hour', -1))"
+          >
+            ▼
+          </button>
+        </div>
+      </div>
+
       <span class="picker__colon">:</span>
-      <select
-        class="picker__select"
-        :value="minute"
-        :aria-label="t('config.minuteLabel')"
-        @change="updateTime('minute', ($event.target as HTMLSelectElement).value)"
-      >
-        <option v-for="option in minuteOptions" :key="option" :value="option">
-          {{ option }} 分
-        </option>
-      </select>
+
+      <div class="tstep">
+        <input
+          class="tstep__value"
+          type="text"
+          inputmode="numeric"
+          :value="minute"
+          :aria-label="t('config.minuteLabel')"
+          @change="commit('minute', ($event.target as HTMLInputElement).value)"
+          @wheel.prevent="onWheel('minute', $event)"
+        />
+        <div class="tstep__btns">
+          <button
+            class="tstep__btn"
+            type="button"
+            :aria-label="t('config.minuteLabel') + ' +1'"
+            @pointerdown="startHold(() => step('minute', 1))"
+          >
+            ▲
+          </button>
+          <button
+            class="tstep__btn"
+            type="button"
+            :aria-label="t('config.minuteLabel') + ' -1'"
+            @pointerdown="startHold(() => step('minute', -1))"
+          >
+            ▼
+          </button>
+        </div>
+      </div>
+
       <button class="picker__now" type="button" @click="setNow">
         {{ t('config.timeNow') }}
       </button>
@@ -326,14 +410,53 @@ function setNow() {
   border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.picker__select {
-  flex: 1;
+.tstep {
+  display: flex;
+  align-items: stretch;
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 6px;
-  padding: 4px 6px;
-  font-size: 12px;
   background-color: #fff;
+  overflow: hidden;
+}
+
+.tstep__value {
+  width: 34px;
+  border: none;
+  background: none;
+  text-align: center;
+  font-size: 13px;
   color: inherit;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 0;
+}
+
+/* 隐藏数字输入的原生上下箭头 */
+.tstep__value::-webkit-outer-spin-button,
+.tstep__value::-webkit-inner-spin-button {
+  appearance: none;
+}
+
+.tstep__btns {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.tstep__btn {
+  border: none;
+  background: none;
+  font-size: 7px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.55;
+  flex: 1;
+}
+
+.tstep__btn:hover {
+  opacity: 1;
+  background-color: rgba(0, 145, 255, 0.1);
 }
 
 .picker__colon {
@@ -371,9 +494,13 @@ function setNow() {
     border-top-color: rgba(255, 255, 255, 0.1);
   }
 
-  .picker__select {
+  .tstep {
     background-color: #2b2b2b;
     border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .tstep__btns {
+    border-left-color: rgba(255, 255, 255, 0.1);
   }
 
   .picker__now {
