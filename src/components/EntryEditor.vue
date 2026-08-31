@@ -2,7 +2,6 @@
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { DisplayUnit, Entry } from '../types/entry';
-import { ENTRY_COLORS } from '../types/entry';
 import { effectiveTime, effectiveDateIso, formatEntryText, isValidDate } from '../utils/entries';
 import DateTimePicker from './DateTimePicker.vue';
 import EntryTypeSymbol from './EntryTypeSymbol.vue';
@@ -35,13 +34,9 @@ const units = computed(() =>
 const repeats = computed(() =>
   ['none', 'daily', 'workday'].map((value) => ({ value, label: t(`config.repeat.${value}`) })),
 );
-const custom = computed(() => !(ENTRY_COLORS as readonly string[]).includes(draft.value.color));
 const canSave = computed(() => !!draft.value.name.trim() && isValidDate(draft.value.date));
 
 function changeType(type: string) {
-  const colors = { countdown: '#2a9cdb', elapsed: '#368e76' };
-  if (draft.value.color === colors[draft.value.entryType])
-    draft.value.color = colors[type as keyof typeof colors];
   draft.value.entryType = type as Entry['entryType'];
   if (type === 'elapsed') draft.value.repeat = undefined;
 }
@@ -187,25 +182,6 @@ defineExpose({ submit: () => form.value?.requestSubmit() });
           ><ToggleSwitch v-model="draft.pinned"
         /></label>
         <div class="field">
-          <span>{{ t('config.fieldColor') }}</span>
-          <div class="colors">
-            <button
-              v-for="color in ENTRY_COLORS"
-              :key="color"
-              class="color-dot"
-              type="button"
-              :style="{ background: color }"
-              :aria-label="color"
-              :aria-pressed="draft.color === color"
-              @click="draft.color = color"
-            /><label class="custom-color" :class="{ selected: custom }"
-              ><input v-model="draft.color" type="color" :aria-label="t('config.customColor')" />{{
-                t('config.customColor')
-              }}</label
-            >
-          </div>
-        </div>
-        <div class="field">
           <label for="entry-note">{{ t('config.fieldNote') }}</label
           ><textarea
             id="entry-note"
@@ -330,39 +306,6 @@ summary {
 .more small {
   color: var(--ts-text-2);
   line-height: 1.6;
-}
-.colors {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-.color-dot {
-  width: 23px;
-  height: 23px;
-  border-radius: 50%;
-  border: 3px solid var(--ts-surface);
-  cursor: pointer;
-  outline-offset: 2px;
-}
-.color-dot[aria-pressed='true'] {
-  outline: 2px solid var(--ts-blue);
-}
-.custom-color {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 11px;
-}
-.custom-color input {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 0;
-  background: none;
-}
-.selected {
-  color: var(--ts-blue);
 }
 .editor-actions {
   display: flex;

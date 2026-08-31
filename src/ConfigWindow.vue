@@ -158,7 +158,6 @@ function beginEdit(entry?: Entry) {
     editing.value = entry ? { ...entry } : createDraft();
     if (!entry && nav.value === 'elapsed') {
       editing.value.entryType = 'elapsed';
-      editing.value.color = '#368e76';
     }
     snapshot.value = JSON.stringify(editing.value);
     actionError.value = '';

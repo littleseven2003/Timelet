@@ -64,9 +64,6 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
     </button>
     <div v-if="expanded" :id="`detail-${entry.id}`" class="entry-row__detail">
       <p v-if="entry.note" class="entry-row__note">{{ entry.note }}</p>
-      <span class="entry-row__color"
-        ><i :style="{ background: entry.color }" />{{ t('config.fieldColor') }}</span
-      >
       <div class="entry-row__actions">
         <template v-if="!entry.archived">
           <button type="button" :disabled="disabled" @click="$emit('edit')">
@@ -175,18 +172,6 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
   line-height: 1.7;
   margin: 4px 0 8px;
   color: var(--ts-text-2);
-}
-.entry-row__color {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: var(--ts-text-2);
-}
-.entry-row__color i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
 }
 .entry-row__actions {
   display: flex;

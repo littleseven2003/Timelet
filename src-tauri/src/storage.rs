@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 // 数据文件结构版本，字段演进时递增并编写迁移逻辑
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 const ENTRIES_FILE: &str = "entries.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -24,7 +24,6 @@ pub struct Entry {
     pub display_unit: Option<String>,
     // 选填备注，面板悬停时展示
     pub note: Option<String>,
-    pub color: String,
     pub pinned: bool,
     // 手动排序值（拖拽后生成），缺失表示按自动规则排序
     pub sort_index: Option<i64>,
@@ -216,15 +215,23 @@ pub fn entry_reorder(
 mod tests {
     use super::*;
     #[test]
-    fn legacy_schema_keeps_optional_archive_field_and_rejects_future_versions() {
-        let legacy = r##"{"schema_version":1,"entries":[{"id":"a","name":"生日","entryType":"countdown","date":"2026-09-01","color":"#2a9cdb","pinned":false,"createdAt":"2026-08-01T00:00:00Z","updatedAt":"2026-08-01T00:00:00Z"}]}"##;
-        let store: Store = serde_json::from_str(legacy).unwrap();
+    fn current_schema_keeps_optional_archive_field_and_rejects_other_versions() {
+        let current = r##"{"schema_version":2,"entries":[{"id":"a","name":"生日","entryType":"countdown","date":"2026-09-01","pinned":false,"createdAt":"2026-08-01T00:00:00Z","updatedAt":"2026-08-01T00:00:00Z"}]}"##;
+        let store: Store = serde_json::from_str(current).unwrap();
         assert!(store.validate().is_ok());
         assert_eq!(store.entries[0].archived, None);
+        let legacy: Store =
+            serde_json::from_str(&current.replace("schema_version\":2", "schema_version\":1"))
+                .unwrap();
+        assert!(legacy.validate().is_err());
         let future: Store =
-            serde_json::from_str(&legacy.replace("schema_version\":1", "schema_version\":2"))
+            serde_json::from_str(&current.replace("schema_version\":2", "schema_version\":3"))
                 .unwrap();
         assert!(future.validate().is_err());
+        assert!(serde_json::from_str::<Store>(
+            &current.replace("\"pinned\":false", "\"color\":\"#2a9cdb\",\"pinned\":false")
+        )
+        .is_err());
     }
 
     #[test]
@@ -239,7 +246,7 @@ mod tests {
 
     #[test]
     fn stale_edits_cannot_overwrite_or_resurrect_an_entry() {
-        let mut store: Store = serde_json::from_str(r##"{"schema_version":1,"entries":[{"id":"a","name":"日期","entryType":"countdown","date":"2026-09-01","color":"#2a9cdb","pinned":false,"createdAt":"old","updatedAt":"new"}]}"##).unwrap();
+        let mut store: Store = serde_json::from_str(r##"{"schema_version":2,"entries":[{"id":"a","name":"日期","entryType":"countdown","date":"2026-09-01","pinned":false,"createdAt":"old","updatedAt":"new"}]}"##).unwrap();
         let mut stale = store.entries[0].clone();
         stale.name = "旧编辑".into();
         assert!(store.upsert(stale.clone(), Some("old")).is_err());

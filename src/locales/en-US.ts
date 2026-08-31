@@ -108,8 +108,6 @@ export default {
     typeElapsed: 'Elapsed',
     targetDate: 'Target date',
     startDate: 'Start date',
-    fieldColor: 'Color',
-    customColor: 'Custom color',
     fieldPinned: 'Pinned',
     pinnedOn: 'Pinned',
     pinnedOff: 'Not pinned',

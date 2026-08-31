@@ -108,8 +108,6 @@ export default {
     typeElapsed: '正数日',
     targetDate: '目标日期',
     startDate: '起始日期',
-    fieldColor: '颜色',
-    customColor: '自定义颜色',
     fieldPinned: '置顶显示',
     pinnedOn: '已置顶',
     pinnedOff: '未置顶',

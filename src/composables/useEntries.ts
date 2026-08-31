@@ -137,7 +137,6 @@ export function createDraft(now = new Date()): Entry {
     name: '',
     entryType: 'countdown',
     date: '',
-    color: '#2a9cdb',
     pinned: false,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
