@@ -61,6 +61,9 @@ async function mutate(action: () => Promise<void>) {
   try {
     await action();
     await reload();
+  } catch (cause) {
+    await reload();
+    throw cause;
   } finally {
     busy.value = false;
   }
