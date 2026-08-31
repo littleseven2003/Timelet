@@ -21,7 +21,7 @@ import EntryTypeSymbol from './components/EntryTypeSymbol.vue';
 
 type NavKey = 'entries' | 'settings' | 'about';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const activeNav = ref<NavKey>('entries');
 const { entries, loaded, reload, upsert, remove, reorder } = useEntries();
 
@@ -51,8 +51,24 @@ async function togglePinned(entry: Entry) {
 const sorted = computed(() => sortEntries(entries.value));
 const canSave = computed(() => !!editing.value?.name && !!editing.value?.date);
 
+// 共享时钟：分组、确切日期与头部日期依赖当前时间，跨日/唤醒后自动刷新
+const now = ref(Date.now());
+let ticker: ReturnType<typeof setInterval> | undefined;
+
+// 头部日期（此时视图）
+const today = computed(() => {
+  const current = new Date(now.value);
+  return {
+    date: current.toLocaleDateString(locale.value, { month: 'long', day: 'numeric' }),
+    weekday: current.toLocaleDateString(locale.value, { weekday: 'long' }),
+  };
+});
+
 // 主窗口分组（设计文档 5.2）：今天 / 接下来 7 天 / 更晚；拖拽预览期间退回平铺
-const groups = computed(() => groupForConfig(entries.value));
+const groups = computed(() => {
+  void now.value;
+  return groupForConfig(entries.value, now.value);
+});
 const flatGroups = computed(() => groups.value.flatMap((group) => group.items));
 
 // 预览卡文案：随名称/类型/日期输入实时变化
@@ -217,6 +233,14 @@ async function applyPendingAction(action: PendingAction) {
 // 面板动作载荷：新建或编辑指定条目
 type PendingAction = { kind: 'create' } | { kind: 'edit'; id: string };
 
+onMounted(() => {
+  ticker = setInterval(() => {
+    now.value = Date.now();
+  }, 30_000);
+});
+
+onBeforeUnmount(() => clearInterval(ticker));
+
 onMounted(async () => {
   // 窗口先于面板动作创建时，取走暂存的待执行动作
   const pending = await invoke<PendingAction | null>('take_pending_action');
@@ -290,6 +314,7 @@ onMounted(async () => {
       <template v-if="activeNav === 'entries'">
         <!-- 编辑表单 -->
         <form v-if="editing" class="entry-form" @submit.prevent="submit">
+          <div class="entry-form__date">{{ today.date }} · {{ today.weekday }}</div>
           <div class="entry-form__title-row">
             <h2 class="entry-form__title">
               {{ isNew ? t('config.addEntry') : t('config.editEntry') }}
@@ -486,7 +511,10 @@ onMounted(async () => {
         <!-- 列表 -->
         <template v-else>
           <header class="entry-list__header">
-            <h2 class="entry-list__title">{{ t('config.nav.entries') }}</h2>
+            <div>
+              <h2 class="entry-list__title">{{ t('config.nav.entries') }}</h2>
+              <div class="entry-list__date">{{ today.date }} · {{ today.weekday }}</div>
+            </div>
             <button class="btn btn--primary" type="button" @click="openCreate">
               {{ t('config.addEntry') }}
             </button>
@@ -786,6 +814,17 @@ onMounted(async () => {
   font-size: 16px;
   font-weight: 600;
   margin: 0;
+}
+
+.entry-list__date,
+.entry-form__date {
+  font-size: 12px;
+  color: var(--ts-text-2);
+  margin-top: 3px;
+}
+
+.entry-form__date {
+  margin-bottom: 10px;
 }
 
 .entry-list {

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 const SETTINGS_FILE: &str = "settings.json";
 const WINDOW_STATE_FILE: &str = "window-state.json";
@@ -62,7 +62,9 @@ pub fn settings_set(
     let tmp = file.with_extension("json.tmp");
     fs::write(&tmp, text).map_err(|e| e.to_string())?;
     fs::rename(&tmp, &file).map_err(|e| e.to_string())?;
-    *state.0.lock().unwrap() = settings;
+    *state.0.lock().unwrap() = settings.clone();
+    // 广播设置变更，让常驻面板与主窗口同步（如过期显示开关）
+    app.emit("settings-changed", settings).map_err(|e| e.to_string())?;
     Ok(())
 }
 

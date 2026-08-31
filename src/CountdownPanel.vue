@@ -2,9 +2,10 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { Entry, EntryType } from './types/entry';
 import { useEntries } from './composables/useEntries';
-import { getSettings } from './api/settings';
+import { getSettings, type AppSettings } from './api/settings';
 import {
   effectiveDeadline,
   formatEntryText,
@@ -24,9 +25,9 @@ const showExpired = ref(true);
 const now = ref(Date.now());
 let ticker: ReturnType<typeof setInterval> | undefined;
 
-// 品牌头日期：8月30日 · 星期五
+// 品牌头日期：8月30日 · 星期五（依赖共享时钟，跨日自动刷新）
 const today = computed(() => {
-  const current = new Date();
+  const current = new Date(now.value);
   return {
     date: current.toLocaleDateString(locale.value, { month: 'long', day: 'numeric' }),
     weekday: current.toLocaleDateString(locale.value, { weekday: 'long' }),
@@ -108,6 +109,10 @@ onMounted(async () => {
   ticker = setInterval(() => {
     now.value = Date.now();
   }, 30_000);
+  // 设置保存后同步过期显示等偏好
+  listen<AppSettings>('settings-changed', (event) => {
+    showExpired.value = event.payload.showExpired;
+  });
 });
 
 onUnmounted(() => clearInterval(ticker));
