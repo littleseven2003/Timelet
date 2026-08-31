@@ -22,10 +22,11 @@ export default {
     detailStart: 'Start',
     daysLeft: '{days} days left',
     today: 'Today',
-    expired: 'Expired {days} days ago',
+    expired: '{days} days ago',
     elapsed: '{days} days passed',
     soon: 'Arriving soon',
-    expiredOnly: 'Expired',
+    notStarted: 'Not started · in {days} days',
+    expiredOnly: 'Past',
     left: {
       daysHours: '{d} d {h} h left',
       hoursMinutes: '{h} h {m} m left',
@@ -42,9 +43,9 @@ export default {
       year: '{n} years left',
     },
     expiredUnits: {
-      week: 'Expired {n} weeks ago',
-      month: 'Expired {n} months ago',
-      year: 'Expired {n} years ago',
+      week: '{n} weeks ago',
+      month: '{n} months ago',
+      year: '{n} years ago',
     },
     elapsedUnits: {
       week: '{n} weeks passed',

@@ -91,11 +91,13 @@ export function entryDisplayValue(entry: Entry): { value: number; unit: DisplayU
   return value == null ? null : { value, unit };
 }
 
-// 是否为已过期的倒计时条目（带时刻按时刻判定，纯日期按自然日判定；循环条目永不过期）
+// 是否为已过期的倒计时条目：带时刻按时刻判定；纯日期在目标日全天有效，次日零点起算过期；循环条目永不过期
 export function isExpiredCountdown(entry: Entry, nowMs: number = Date.now()): boolean {
   if (entry.entryType !== 'countdown') return false;
   if (entry.repeat) return false;
-  return effectiveDeadline(entry, nowMs).getTime() < nowMs;
+  const deadline = entryDeadline(entry).getTime();
+  if (entry.time) return deadline < nowMs;
+  return deadline + 86_400_000 <= nowMs;
 }
 
 // 展示文案翻译函数的最小形状（兼容 vue-i18n 的 t）
@@ -111,6 +113,8 @@ export function formatEntryText(entry: Entry, nowMs: number, t: Translate): stri
   const unit = entry.displayUnit ?? 'day';
 
   if (entry.entryType === 'elapsed') {
+    // 起始日在未来：尚未开始，保留日期并说明剩余天数
+    if (days < 0) return t('panel.notStarted', { days: -days });
     if (unit !== 'day') {
       const value = entryUnitValue(entry, unit) ?? 0;
       if (value > 0) return t(`panel.elapsedUnits.${unit}`, { n: value });

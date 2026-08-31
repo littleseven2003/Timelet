@@ -21,10 +21,11 @@ export default {
     detailStart: '起始',
     daysLeft: '还有 {days} 天',
     today: '就是今天',
-    expired: '已过期 {days} 天',
+    expired: '已过去 {days} 天',
     elapsed: '已经 {days} 天',
     soon: '即将到达',
-    expiredOnly: '已过期',
+    notStarted: '尚未开始 · 还有 {days} 天',
+    expiredOnly: '已过去',
     left: {
       daysHours: '还有 {d} 天 {h} 小时',
       hoursMinutes: '还有 {h} 小时 {m} 分',
@@ -41,9 +42,9 @@ export default {
       year: '剩余 {n} 年',
     },
     expiredUnits: {
-      week: '已过期 {n} 周',
-      month: '已过期 {n} 个月',
-      year: '已过期 {n} 年',
+      week: '已过去 {n} 周',
+      month: '已过去 {n} 个月',
+      year: '已过去 {n} 年',
     },
     elapsedUnits: {
       week: '已经 {n} 周',
