@@ -304,8 +304,22 @@ onMounted(async () => {
             </button>
           </div>
 
-          <!-- 实时预览：大数字 + 状态小字（带时刻条目回退文本） -->
+          <!-- 实时预览：大数字 + 状态小字（带时刻条目回退文本）；时弧作为背景主意象 -->
           <div class="entry-preview">
+            <svg
+              class="entry-preview__arc"
+              viewBox="0 0 96 96"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M20 74a40 40 0 1 1 56 0"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+              />
+              <circle cx="76" cy="70" r="5" fill="currentColor" />
+            </svg>
             <span class="entry-preview__color" :style="{ backgroundColor: editing.color }" />
             <div class="entry-preview__main">
               <span class="entry-preview__name">{{ editing.name || t('config.previewName') }}</span>
@@ -1011,6 +1025,7 @@ onMounted(async () => {
 
 /* 实时预览卡：结构对齐面板条目 */
 .entry-preview {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1018,6 +1033,18 @@ onMounted(async () => {
   border: 1px solid var(--ts-line);
   border-radius: 10px;
   background-color: var(--ts-surface);
+  overflow: hidden;
+}
+
+/* 时弧：开放圆弧 + 目标端点，颜色随条目色，仅作背景意象 */
+.entry-preview__arc {
+  position: absolute;
+  right: -14px;
+  top: -30px;
+  width: 96px;
+  height: 96px;
+  opacity: 0.14;
+  pointer-events: none;
 }
 
 .entry-preview__color {
