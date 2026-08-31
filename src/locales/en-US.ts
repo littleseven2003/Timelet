@@ -1,17 +1,18 @@
-// 预留的英文语言包，尚未启用（界面文案以 zh-CN 为准）
 export default {
   app: {
     name: 'Timelet',
     tagline: 'Keep important days at hand',
   },
   panel: {
+    filteredEmpty: 'No entries match the panel settings. Open the main window to see all entries.',
     brand: 'Timelet',
-    viewAll: 'View all entries',
+    viewAll: 'Open main window',
     sections: {
       now: 'Now · Today',
-      soon: 'Soon · Countdowns',
-      elapsed: 'Elapsed · Counting',
+      soon: 'Soon · Next 7 days',
+      elapsed: 'Elapsed · Ongoing',
       past: 'Overdue',
+      later: 'Later · Beyond 7 days',
     },
     emptyTitle: 'No important dates yet.',
     emptyHint: 'Open the settings window to add your first entry',
@@ -52,6 +53,18 @@ export default {
       month: '{n} months passed',
       year: '{n} years passed',
     },
+    justStarted: 'Just started',
+    notStartedSoon: 'Starting soon',
+    elapsedTime: {
+      daysHours: 'Elapsed {d}d {h}h',
+      hoursMinutes: 'Elapsed {h}h {m}min',
+      minutes: 'Elapsed {m}min',
+    },
+    notStartedTime: {
+      daysHours: 'Starts in {d}d {h}h',
+      hoursMinutes: 'Starts in {h}h {m}min',
+      minutes: 'Starts in {m}min',
+    },
   },
   config: {
     nav: {
@@ -76,7 +89,9 @@ export default {
     groups: {
       now: 'Now · Today',
       week: 'Soon · Next 7 days',
-      later: 'Later',
+      later: 'Later · Beyond 7 days',
+      elapsed: 'Elapsed · Ongoing',
+      past: 'Past',
     },
     sectionBasic: 'Basic',
     sectionTime: 'Time',
@@ -103,7 +118,7 @@ export default {
     repeat: {
       none: 'Never',
       daily: 'Daily',
-      workday: 'Workdays',
+      workday: 'Monday–Friday',
     },
     fieldUnit: 'Display unit',
     saveHint: 'Enter a name and pick a date to save',
@@ -136,7 +151,37 @@ export default {
     delete: 'Delete',
     confirmDelete: 'Confirm',
     deleteConfirmTitle: 'Delete Entry',
-    deleteConfirmText: 'Delete "{name}"? This cannot be undone.',
+    deleteConfirmText:
+      'Delete “{name}”? You can undo using the confirmation message until this window closes.',
+    showMore: 'More options',
+    chooseDate: 'Choose date',
+    invalidTime: 'Enter a valid time (00:00–23:59)',
+    repeatHint:
+      'Workdays are Monday–Friday. Repeating updates the countdown; system notifications are not available yet.',
+    progressRange: 'Recorded {start}, target {end}',
+    navigation: 'Entries',
+    otherNavigation: 'Manage application',
+    unsavedTitle: 'Keep your changes?',
+    unsavedText: 'There are unsaved changes. Leaving will discard them.',
+    discard: 'Discard and leave',
+    draftKept: 'Main window opened. Your unsaved edits are preserved.',
+    archived: 'Archived',
+    restored: 'Restored',
+    deleted: 'Deleted. You can undo here.',
+    undone: 'Undone',
+    undo: 'Undo',
+    undoConflict: 'This entry already exists. No content was overwritten.',
+    copySuffix: ' (copy)',
+    copied: 'Copy created',
+    reorder: 'Reorder',
+    autoOrder: 'Automatic order',
+    orderHint:
+      'Drag or use the up/down buttons, then save. Pinned and other entries are ordered separately.',
+    orderChanged: 'Entries changed in another window. Please restart ordering.',
+    moveUp: 'Move {name} up',
+    moveDown: 'Move {name} down',
+    saveOrder: 'Save order',
+    clearSearch: 'Clear search',
   },
   settings: {
     groupGeneral: 'General',
@@ -148,5 +193,22 @@ export default {
     launchError: 'Failed to update launch setting, please retry',
     showExpired: 'Show expired entries',
     showExpiredDesc: 'Hide expired countdown entries from the panel when off',
+    panelLimit: 'Panel entries',
+    panelLimitDesc:
+      'Includes the featured entry; defaults to 6. Open the main window for all entries.',
+    launchRollbackError: 'Could not restore the startup setting. Check system settings.',
+    themes: {
+      system: 'System',
+      light: 'Light',
+      dark: 'Dark',
+    },
+  },
+  common: {
+    loading: 'Loading…',
+    loadError: 'Could not load. Original files are preserved.',
+    saving: 'Saving…',
+    saved: 'Saved',
+    retry: 'Retry',
+    dismiss: 'Dismiss',
   },
 } as const;

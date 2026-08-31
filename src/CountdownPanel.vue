@@ -82,6 +82,7 @@ const featuredTide = computed(() => {
 const sectionLabels: Record<EntrySection, string> = {
   now: 'panel.sections.now',
   soon: 'panel.sections.soon',
+  later: 'panel.sections.later',
   elapsed: 'panel.sections.elapsed',
   past: 'panel.sections.past',
 };

@@ -1,293 +1,263 @@
 import type { DisplayUnit, Entry } from '../types/entry';
 
-// 解析 ISO 日期（YYYY-MM-DD）为本地时区的当日零点
-function parseLocalDate(isoDate: string): Date {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  return new Date(year!, month! - 1, day!);
-}
-
-// 两个自然日之间的整月差（不足整月舍去）
-function calendarMonthsBetween(from: Date, to: Date): number {
-  let months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
-  if (to.getDate() < from.getDate()) months -= 1;
-  return months;
-}
-
-// 今日零点
-export function startOfToday(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
-// 条目的生效时间点：带时刻为当日具体时分，纯日期为当日零点
-export function entryDeadline(entry: Entry): Date {
-  const base = parseLocalDate(entry.date);
-  if (entry.time) {
-    const [hour, minute] = entry.time.split(':').map(Number);
-    base.setHours(hour!, minute!, 0, 0);
-  }
-  return base;
-}
-
-function isWorkday(date: Date): boolean {
-  const weekday = date.getDay();
-  return weekday >= 1 && weekday <= 5;
-}
-
-function atTime(day: Date, hour: number, minute: number): Date {
-  const result = new Date(day);
-  result.setHours(hour, minute, 0, 0);
+const DAY = 86_400_000;
+export function parseLocalDate(iso: string): Date {
+  const [year, month, day] = iso.split('-').map(Number);
+  const result = new Date(0);
+  result.setFullYear(year!, month! - 1, day!);
+  result.setHours(0, 0, 0, 0);
   return result;
 }
 
-// 条目的有效发生时间：单次条目为固定截止；循环条目为不早于起始日期、不早于当前的下一次发生
-export function effectiveDeadline(entry: Entry, nowMs: number): Date {
-  if (!entry.time || !entry.repeat) return entryDeadline(entry);
+export function isValidDate(iso: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || Number(iso.slice(0, 4)) < 1) return false;
+  const date = parseLocalDate(iso);
+  return Number.isFinite(date.getTime()) && dateIso(date) === iso;
+}
 
-  const [hour, minute] = entry.time.split(':').map(Number);
-  // 循环锚点：起始日期上的目标时刻，下一次发生不得早于它
-  const anchor = entryDeadline(entry).getTime();
-  let candidate = atTime(new Date(nowMs), hour!, minute!);
+export function dateIso(date: Date): string {
+  return `${String(date.getFullYear()).padStart(4, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
-  const advance = () => atTime(new Date(candidate.getTime() + 86_400_000), hour!, minute!);
-  if (entry.repeat === 'workday') {
-    while (!isWorkday(candidate) || candidate.getTime() <= nowMs || candidate.getTime() < anchor) {
-      candidate = advance();
-    }
-    return candidate;
+export function startOfToday(nowMs = Date.now()): Date {
+  const day = new Date(nowMs);
+  day.setHours(0, 0, 0, 0);
+  return day;
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+// 以本地年月日构造日历序号，避免夏令时的 23/25 小时影响计日。
+function ordinal(date: Date): number {
+  const day = new Date(0);
+  day.setUTCFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+  day.setUTCHours(0, 0, 0, 0);
+  return day.getTime() / DAY;
+}
+
+export function daysBetween(from: Date, toIso: string): number {
+  return ordinal(parseLocalDate(toIso)) - ordinal(from);
+}
+
+export function entryDeadline(entry: Entry): Date {
+  const date = parseLocalDate(entry.date);
+  if (entry.time) {
+    const [hour, minute] = entry.time.split(':').map(Number);
+    date.setHours(hour!, minute!, 0, 0);
   }
-  while (candidate.getTime() <= nowMs || candidate.getTime() < anchor) {
-    candidate = advance();
+  return date;
+}
+
+// 从当前日与起始日的较晚者开始；日历递增避免夏令时回拨时停留在同一天。
+export function effectiveDeadline(entry: Entry, nowMs: number): Date {
+  const anchor = entryDeadline(entry);
+  if (entry.entryType !== 'countdown' || !entry.time || !entry.repeat) return anchor;
+  const [hour, minute] = entry.time.split(':').map(Number);
+  let candidate = startOfToday(Math.max(anchor.getTime(), nowMs));
+  candidate.setHours(hour!, minute!, 0, 0);
+  while (
+    candidate.getTime() < nowMs ||
+    candidate.getTime() < anchor.getTime() ||
+    (entry.repeat === 'workday' && (candidate.getDay() === 0 || candidate.getDay() === 6))
+  ) {
+    candidate = addDays(candidate, 1);
+    candidate.setHours(hour!, minute!, 0, 0);
   }
   return candidate;
 }
 
-// 有效发生日期的 ISO 串，供条目第二行确切日期与相对时间同源展示
-export function effectiveDateIso(entry: Entry, nowMs: number = Date.now()): string {
+export function effectiveDateIso(entry: Entry, nowMs = Date.now()): string {
+  return dateIso(effectiveDeadline(entry, nowMs));
+}
+
+export function effectiveTime(entry: Entry, nowMs: number): string {
   const date = effectiveDeadline(entry, nowMs);
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-// 两个自然日相差的天数（本地时区，按日历日而非 24 小时制）
-export function daysBetween(from: Date, toIsoDate: string): number {
-  const target = parseLocalDate(toIsoDate);
-  return Math.round((target.getTime() - from.getTime()) / 86_400_000);
+export function entryDays(entry: Entry, today = startOfToday()): number {
+  const days = daysBetween(today, entry.date);
+  return entry.entryType === 'elapsed' ? -days : days;
 }
 
-// 条目展示天数：倒计时为剩余天数（负数表示已过期），正计时为已过天数；仅适用于纯日期条目
-export function entryDays(entry: Entry, today: Date = startOfToday()): number {
-  const diff = daysBetween(today, entry.date);
-  return entry.entryType === 'elapsed' ? -diff : diff;
+function calendarMonthsBetween(from: Date, to: Date): number {
+  if (from > to) return -calendarMonthsBetween(to, from);
+  let months = (to.getFullYear() - from.getFullYear()) * 12 + to.getMonth() - from.getMonth();
+  if (to.getDate() < from.getDate()) months--;
+  return months;
 }
 
-// 按展示单位换算条目数值（倒计时为剩余、正计时为已过；周向下取整、月/年按日历整月差）；仅纯日期条目
-export function entryUnitValue(entry: Entry, unit: DisplayUnit): number | null {
+export function entryUnitValue(entry: Entry, unit: DisplayUnit, nowMs = Date.now()): number | null {
   if (entry.time) return null;
-  const days = entryDays(entry);
+  const today = startOfToday(nowMs);
+  const days = entryDays(entry, today);
   if (unit === 'day') return days;
   if (unit === 'week') return Math.trunc(days / 7);
-
-  const today = startOfToday();
-  const from = entry.entryType === 'countdown' ? today : parseLocalDate(entry.date);
-  const to = entry.entryType === 'countdown' ? parseLocalDate(entry.date) : today;
-  const months = calendarMonthsBetween(from, to);
-  return unit === 'month' ? months : Math.trunc(months / 12);
+  const months =
+    calendarMonthsBetween(today, parseLocalDate(entry.date)) *
+    (entry.entryType === 'elapsed' ? -1 : 1);
+  return (unit === 'month' ? months : Math.trunc(months / 12)) || 0;
 }
 
-// 大数字预览用：返回当前展示单位的数值与单位（带时刻条目返回 null 走文本展示）
-export function entryDisplayValue(entry: Entry): { value: number; unit: DisplayUnit } | null {
+export function entryDisplayValue(
+  entry: Entry,
+  nowMs = Date.now(),
+): { value: number; unit: DisplayUnit } | null {
   const unit = entry.displayUnit ?? 'day';
-  const value = entryUnitValue(entry, unit);
+  const value = entryUnitValue(entry, unit, nowMs);
   return value == null ? null : { value, unit };
 }
 
-// 是否为已过期的倒计时条目：带时刻按时刻判定；纯日期在目标日全天有效，次日零点起算过期；循环条目永不过期
-export function isExpiredCountdown(entry: Entry, nowMs: number = Date.now()): boolean {
-  if (entry.entryType !== 'countdown') return false;
-  if (entry.repeat) return false;
-  const deadline = entryDeadline(entry).getTime();
-  if (entry.time) return deadline < nowMs;
-  return deadline + 86_400_000 <= nowMs;
+export function isExpiredCountdown(entry: Entry, nowMs = Date.now()): boolean {
+  if (entry.entryType !== 'countdown' || (entry.time && entry.repeat)) return false;
+  return entry.time
+    ? entryDeadline(entry).getTime() < nowMs
+    : addDays(entryDeadline(entry), 1).getTime() <= nowMs;
 }
 
-// 展示文案翻译函数的最小形状（兼容 vue-i18n 的 t）
 type Translate = (key: string, params?: Record<string, number>) => string;
-
-// 条目展示文案：天数（今天/剩余/已过期/已过）、时刻精确间隔或按展示单位换算，供面板与编辑预览共用；
-// 单位换算结果不足 1 时回退到按天展示
 export function formatEntryText(entry: Entry, nowMs: number, t: Translate): string {
-  if (!entry.date) return '';
+  if (!isValidDate(entry.date)) return '';
   if (entry.time) return timedText(entry, nowMs, t);
-
-  const days = entryDays(entry);
+  const days = entryDays(entry, startOfToday(nowMs));
   const unit = entry.displayUnit ?? 'day';
-
+  const value = entryUnitValue(entry, unit, nowMs) ?? 0;
   if (entry.entryType === 'elapsed') {
-    // 起始日在未来：尚未开始，保留日期并说明剩余天数
     if (days < 0) return t('panel.notStarted', { days: -days });
-    if (unit !== 'day') {
-      const value = entryUnitValue(entry, unit) ?? 0;
-      if (value > 0) return t(`panel.elapsedUnits.${unit}`, { n: value });
-    }
+    if (unit !== 'day' && value > 0) return t(`panel.elapsedUnits.${unit}`, { n: value });
     return t('panel.elapsed', { days });
   }
-
   if (days === 0) return t('panel.today');
-
-  if (days > 0) {
-    if (unit !== 'day') {
-      const value = entryUnitValue(entry, unit) ?? 0;
-      if (value > 0) return t(`panel.units.${unit}`, { n: value });
-    }
-    return t('panel.daysLeft', { days });
+  if (unit !== 'day' && Math.abs(value) > 0) {
+    return t(`panel.${days > 0 ? 'units' : 'expiredUnits'}.${unit}`, { n: Math.abs(value) });
   }
-
-  if (unit !== 'day') {
-    const value = -(entryUnitValue(entry, unit) ?? 0);
-    if (value > 0) return t(`panel.expiredUnits.${unit}`, { n: value });
-  }
-  return t('panel.expired', { days: -days });
+  return t(days > 0 ? 'panel.daysLeft' : 'panel.expired', { days: Math.abs(days) });
 }
 
-// 带时刻条目按精确间隔展示（循环条目对齐下一次发生）：天+小时 → 小时+分 → 分钟
 function timedText(entry: Entry, nowMs: number, t: Translate): string {
-  const deadline = effectiveDeadline(entry, nowMs).getTime();
-  const diffMinutes = Math.round((deadline - nowMs) / 60_000);
-  const expired = diffMinutes < 0;
-  const abs = Math.abs(diffMinutes);
+  const diff = effectiveDeadline(entry, nowMs).getTime() - nowMs;
+  const abs = Math.floor(Math.abs(diff) / 60_000);
   const days = Math.floor(abs / 1440);
   const hours = Math.floor((abs % 1440) / 60);
   const minutes = abs % 60;
-
-  if (days > 0) {
-    return t(expired ? 'panel.ago.daysHours' : 'panel.left.daysHours', { d: days, h: hours });
-  }
-  if (hours > 0) {
-    return t(expired ? 'panel.ago.hoursMinutes' : 'panel.left.hoursMinutes', {
-      h: hours,
-      m: minutes,
-    });
-  }
-  if (minutes > 0) {
-    return t(expired ? 'panel.ago.minutes' : 'panel.left.minutes', { m: minutes });
-  }
-  return expired ? t('panel.expiredOnly') : t('panel.soon');
+  const prefix =
+    entry.entryType === 'elapsed'
+      ? diff > 0
+        ? 'notStartedTime'
+        : 'elapsedTime'
+      : diff < 0
+        ? 'ago'
+        : 'left';
+  if (days > 0) return t(`panel.${prefix}.daysHours`, { d: days, h: hours });
+  if (hours > 0) return t(`panel.${prefix}.hoursMinutes`, { h: hours, m: minutes });
+  if (minutes > 0) return t(`panel.${prefix}.minutes`, { m: minutes });
+  if (entry.entryType === 'elapsed')
+    return t(diff > 0 ? 'panel.notStartedSoon' : 'panel.justStarted');
+  return t(diff < 0 ? 'panel.expiredOnly' : 'panel.soon');
 }
 
-
-// 条目分区：此时（今天内到期）/ 将至（未来）/ 历时（正数日）/ 已过期（倒数日过期）
-export type EntrySection = 'now' | 'soon' | 'elapsed' | 'past';
-
-// 今天零点与明日零点（毫秒），供分区与分组判定
-function dayBounds(nowMs: number) {
-  const start = new Date(nowMs);
-  const today0 = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
-  return { today0, tomorrow0: today0 + 86_400_000 };
-}
-
-export function sectionOf(entry: Entry, nowMs: number = Date.now()): EntrySection {
+export type EntrySection = 'now' | 'soon' | 'elapsed' | 'later' | 'past';
+const SECTION_ORDER: EntrySection[] = ['now', 'soon', 'elapsed', 'later', 'past'];
+export function sectionOf(entry: Entry, nowMs = Date.now()): EntrySection {
   if (entry.entryType === 'elapsed') return 'elapsed';
-  const { today0, tomorrow0 } = dayBounds(nowMs);
-
-  if (entry.repeat) {
-    // 循环条目永不过期，按下一次发生是否在今天内判定
-    const next = effectiveDeadline(entry, nowMs).getTime();
-    return next < tomorrow0 ? 'now' : 'soon';
-  }
-
-  const dl = entryDeadline(entry).getTime();
-  if (entry.time) {
-    // 带时刻条目以当前时刻判定是否已过期
-    return dl >= nowMs ? (dl < tomorrow0 ? 'now' : 'soon') : 'past';
-  }
-  // 纯日期条目按自然日判定
-  return dl >= today0 ? (dl < tomorrow0 ? 'now' : 'soon') : 'past';
+  if (isExpiredCountdown(entry, nowMs)) return 'past';
+  const days = daysBetween(new Date(nowMs), effectiveDateIso(entry, nowMs));
+  return days <= 0 ? 'now' : days <= 7 ? 'soon' : 'later';
 }
 
-// 分区内排序：置顶优先 → 手动顺序（若存在）→ 截止时间
-function compareWithin(a: Entry, b: Entry): number {
+function compareWithin(a: Entry, b: Entry, nowMs: number): number {
   if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-  const ma = a.sortIndex ?? Number.MAX_SAFE_INTEGER;
-  const mb = b.sortIndex ?? Number.MAX_SAFE_INTEGER;
-  if (ma !== mb) return ma - mb;
-  return entryDeadline(a).getTime() - entryDeadline(b).getTime();
+  const manual =
+    (a.sortIndex ?? Number.MAX_SAFE_INTEGER) - (b.sortIndex ?? Number.MAX_SAFE_INTEGER);
+  if (manual) return manual;
+  const diff = effectiveDeadline(a, nowMs).getTime() - effectiveDeadline(b, nowMs).getTime();
+  return (sectionOf(a, nowMs) === 'past' ? -diff : diff) || a.id.localeCompare(b.id);
 }
 
-// 面板分组：此时 → 将至 → 历时 → 已过期（已过滤条目不传入）
 export function groupedEntries(
   entries: Entry[],
-  nowMs: number = Date.now(),
+  nowMs = Date.now(),
 ): { key: EntrySection; items: Entry[] }[] {
-  const buckets: Record<EntrySection, Entry[]> = { now: [], soon: [], elapsed: [], past: [] };
-  for (const entry of entries) buckets[sectionOf(entry, nowMs)].push(entry);
-  const order: EntrySection[] = ['now', 'soon', 'elapsed', 'past'];
-  return order
-    .map((key) => ({ key, items: buckets[key].sort(compareWithin) }))
-    .filter((group) => group.items.length > 0);
+  return SECTION_ORDER.map((key) => ({
+    key,
+    items: entries
+      .filter((entry) => sectionOf(entry, nowMs) === key)
+      .sort((a, b) => compareWithin(a, b, nowMs)),
+  })).filter((group) => group.items.length > 0);
 }
 
-// 主窗口分组（设计文档 5.2）：今天 / 接下来 7 天 / 更晚（含正数日与已过期）
-export type ConfigGroup = 'now' | 'week' | 'later';
-
+export type ConfigGroup = 'now' | 'week' | 'elapsed' | 'later' | 'past';
 export function groupForConfig(
   entries: Entry[],
-  nowMs: number = Date.now(),
+  nowMs = Date.now(),
 ): { key: ConfigGroup; items: Entry[] }[] {
-  const { tomorrow0 } = dayBounds(nowMs);
-  const weekEnd = tomorrow0 + 6 * 86_400_000;
-  const buckets: Record<ConfigGroup, Entry[]> = { now: [], week: [], later: [] };
-
-  for (const entry of entries) {
-    const section = sectionOf(entry, nowMs);
-    if (section === 'now') {
-      buckets.now.push(entry);
-    } else if (section === 'soon') {
-      (effectiveDeadline(entry, nowMs).getTime() < weekEnd ? buckets.week : buckets.later).push(
-        entry,
-      );
-    } else {
-      buckets.later.push(entry);
-    }
-  }
-
-  const order: ConfigGroup[] = ['now', 'week', 'later'];
-  return order
-    .map((key) => ({ key, items: buckets[key].sort(compareWithin) }))
-    .filter((group) => group.items.length > 0);
+  return groupedEntries(entries, nowMs).map((group) => ({
+    ...group,
+    key: group.key === 'soon' ? 'week' : group.key,
+  }));
 }
 
-// 分组序：0 置顶、1 未到期倒计时、2 正计时、3 已过期倒计时；带时刻条目以当前时刻判定
-function groupOf(entry: Entry, nowMs: number): number {
-  if (entry.pinned) return 0;
-  if (entry.entryType === 'countdown') {
-    return effectiveDeadline(entry, nowMs).getTime() >= nowMs ? 1 : 3;
-  }
-  return 2;
-}
-
-// 排序：任一条目存在手动顺序时，整体按"置顶优先 + 手动顺序"；否则按自动规则：
-// 未到期倒计时按截止升序 → 正计时按起始升序 → 已过期倒计时置底（最近过期在前）
-export function sortEntries(entries: Entry[]): Entry[] {
+export function sortEntries(entries: Entry[], nowMs = Date.now()): Entry[] {
   const manual = entries.some((entry) => entry.sortIndex != null);
-  if (manual) {
-    return [...entries].sort((a, b) => {
-      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-      return orderValue(a) - orderValue(b);
-    });
-  }
-
-  const now = Date.now();
   return [...entries].sort((a, b) => {
-    const groupDiff = groupOf(a, now) - groupOf(b, now);
-    if (groupDiff !== 0) return groupDiff;
-    const timeDiff = effectiveDeadline(a, now).getTime() - effectiveDeadline(b, now).getTime();
-    return groupOf(a, now) === 3 ? -timeDiff : timeDiff;
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    if (!manual) {
+      const section =
+        SECTION_ORDER.indexOf(sectionOf(a, nowMs)) - SECTION_ORDER.indexOf(sectionOf(b, nowMs));
+      if (section) return section;
+    }
+    return compareWithin(a, b, nowMs);
   });
 }
 
-// 手动顺序值，无手动顺序的条目排在末尾
-function orderValue(entry: Entry): number {
-  return entry.sortIndex ?? Number.MAX_SAFE_INTEGER;
+// 只有有效、非循环、未过期的置顶倒数日可以承载真实进度。
+export function entryProgress(
+  entry: Entry,
+  nowMs: number,
+): { progress: number; days: number; start: string } | null {
+  if (
+    entry.archived ||
+    entry.entryType !== 'countdown' ||
+    entry.repeat ||
+    isExpiredCountdown(entry, nowMs)
+  )
+    return null;
+  const start = new Date(entry.createdAt);
+  if (!Number.isFinite(start.getTime()) || !isValidDate(entry.date)) return null;
+  const span = entry.time
+    ? entryDeadline(entry).getTime() - start.getTime()
+    : daysBetween(start, entry.date);
+  const passed = entry.time ? nowMs - start.getTime() : ordinal(new Date(nowMs)) - ordinal(start);
+  if (!Number.isFinite(span) || span <= 0) return null;
+  return {
+    progress: Math.max(0, Math.min(1, passed / span)),
+    days: daysBetween(new Date(nowMs), entry.date),
+    start: dateIso(start),
+  };
+}
+
+export function featuredEntry(entries: Entry[], nowMs: number): Entry | null {
+  return (
+    sortEntries(
+      entries.filter((entry) => entry.pinned && entryProgress(entry, nowMs)),
+      nowMs,
+    )[0] ?? null
+  );
+}
+
+export function panelSelection(entries: Entry[], nowMs: number, showExpired: boolean, limit = 6) {
+  const visible = entries.filter(
+    (entry) => !entry.archived && (showExpired || !isExpiredCountdown(entry, nowMs)),
+  );
+  const featured = featuredEntry(visible, nowMs);
+  const rest = visible.filter((entry) => entry.id !== featured?.id);
+  const cap = Math.max(5, Math.min(8, Number.isFinite(limit) ? Math.trunc(limit) : 6));
+  const selected = groupedEntries(rest, nowMs)
+    .flatMap((group) => group.items)
+    .slice(0, cap - (featured ? 1 : 0));
+  return { featured, groups: groupedEntries(selected, nowMs) };
 }
