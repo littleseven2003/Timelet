@@ -11,6 +11,7 @@ import {
   formatEntryText,
   groupedEntries,
   isExpiredCountdown,
+  sortEntries,
   type EntrySection,
 } from './utils/entries';
 import EntryTypeSymbol from './components/EntryTypeSymbol.vue';
@@ -34,13 +35,48 @@ const today = computed(() => {
   };
 });
 
-// 面板分区（设计文档 5.1）：此时 / 将至 / 历时 / 已过期
+// 面板分区（设计文档 5.2）：近屿（置顶摘要，潮线）→ 此时 → 将至/历时/更远
+// 默认最多 6 条：待处理优先，其余按分区规则补足；摘要条目不在列表重复
+const FEATURED_LIMIT = 6;
+
+const featured = computed(() => {
+  void now.value;
+  const visible = showExpired.value
+    ? entries.value
+    : entries.value.filter((entry) => !isExpiredCountdown(entry, now.value));
+  const candidates = sortEntries(
+    visible.filter(
+      (entry) =>
+        entry.pinned && entry.entryType === 'countdown' && !isExpiredCountdown(entry, now.value),
+    ),
+  );
+  return candidates[0] ?? null;
+});
+
 const groups = computed(() => {
   void now.value;
   const visible = showExpired.value
     ? entries.value
     : entries.value.filter((entry) => !isExpiredCountdown(entry, now.value));
-  return groupedEntries(visible, now.value);
+  const rest = featured.value
+    ? visible.filter((entry) => entry.id !== featured.value!.id)
+    : visible;
+  const groups = groupedEntries(rest, now.value);
+  return groups.slice(0, Math.max(0, FEATURED_LIMIT - 1));
+});
+
+// 近屿潮线：进度 = 已经过的记录期 / 到目标的完整期（5.7），无有效区间不画
+const featuredTide = computed(() => {
+  const entry = featured.value;
+  if (!entry) return null;
+  const start = new Date(entry.createdAt);
+  start.setHours(0, 0, 0, 0);
+  const target = new Date(`${entry.date}T00:00:00`);
+  const today0 = new Date(now.value).setHours(0, 0, 0, 0);
+  const span = target.getTime() - start.getTime();
+  if (span <= 0) return null;
+  const progress = Math.min(1, Math.max(0, (today0 - start.getTime()) / span));
+  return { progress, days: Math.round((target.getTime() - today0) / 86_400_000) };
 });
 
 const sectionLabels: Record<EntrySection, string> = {
@@ -161,6 +197,23 @@ onUnmounted(() => clearInterval(ticker));
 
     <template v-else>
       <div class="panel__scroll">
+        <!-- 近屿 · 置顶摘要：潮线由真实区间计算（5.2 / 5.7） -->
+        <section v-if="featured && featuredTide" class="panel-feature">
+          <div class="panel-feature__row">
+            <span class="panel-feature__label">{{ t('config.featuredLabel') }}</span>
+            <span class="panel-feature__days" :style="{ color: featured.color }">
+              {{ featuredTide.days }}{{ t('config.unit.day') }}
+            </span>
+          </div>
+          <div class="panel-feature__name">{{ featured.name }}</div>
+          <div class="panel-feature__tide">
+            <span
+              class="panel-feature__tide-dot"
+              :style="{ left: `${Math.round(featuredTide.progress * 100)}%` }"
+            />
+          </div>
+        </section>
+
         <section v-for="group in groups" :key="group.key" class="panel-section">
           <h3 class="panel-section__title">{{ t(sectionLabels[group.key]) }}</h3>
           <ul class="panel__list">
@@ -201,7 +254,13 @@ onUnmounted(() => clearInterval(ticker));
       </div>
 
       <button class="panel__footer" type="button" @click="openMain">
+        <svg class="panel__footer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+          <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+          <path d="M3.5 9h17" />
+          <path d="M14.5 15.5 18 12l-3.5-3.5" />
+        </svg>
         {{ t('panel.viewAll') }}
+        <span class="panel__footer-arrow">›</span>
       </button>
     </template>
   </aside>
@@ -268,6 +327,56 @@ onUnmounted(() => clearInterval(ticker));
   flex: 1;
   overflow-y: auto;
   padding: 4px 8px 8px;
+}
+
+/* 近屿 · 置顶摘要（5.2） */
+.panel-feature {
+  margin: 6px 4px 10px;
+  padding: 10px 12px;
+  background-color: var(--ts-focus);
+  border-radius: 10px 10px 20px 10px;
+}
+
+.panel-feature__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panel-feature__label {
+  font-size: 11px;
+  color: var(--ts-blue);
+  letter-spacing: 0.03em;
+}
+
+.panel-feature__days {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-feature__name {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 4px 0 8px;
+}
+
+.panel-feature__tide {
+  position: relative;
+  height: 2px;
+  border-radius: 1px;
+  background-color: var(--ts-line);
+}
+
+.panel-feature__tide-dot {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--ts-brand);
+  transform: translate(-50%, -50%);
 }
 
 .panel-section + .panel-section {
@@ -415,12 +524,25 @@ onUnmounted(() => clearInterval(ticker));
   font-size: 13px;
   color: var(--ts-primary-text);
   cursor: pointer;
-  padding: 10px 0;
+  padding: 10px 16px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .panel__footer:hover {
   background-color: rgba(42, 156, 219, 0.07);
+}
+
+.panel__footer-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.panel__footer-arrow {
+  margin-left: auto;
+  opacity: 0.6;
 }
 
 @keyframes panel-in {
