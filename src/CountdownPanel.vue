@@ -2,10 +2,17 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { invoke } from '@tauri-apps/api/core';
-import type { Entry } from './types/entry';
+import type { Entry, EntryType } from './types/entry';
 import { useEntries } from './composables/useEntries';
 import { getSettings } from './api/settings';
-import { entryDeadline, formatEntryText, isExpiredCountdown, sortEntries } from './utils/entries';
+import {
+  entryDeadline,
+  formatEntryText,
+  groupedEntries,
+  isExpiredCountdown,
+  type EntrySection,
+} from './utils/entries';
+import EntryTypeSymbol from './components/EntryTypeSymbol.vue';
 
 const { t, locale } = useI18n();
 const { entries, loaded, reload, ensureChangeListener } = useEntries();
@@ -17,30 +24,40 @@ const showExpired = ref(true);
 const now = ref(Date.now());
 let ticker: ReturnType<typeof setInterval> | undefined;
 
-// 当天日期与星期，跟随 i18n 语言展示
+// 品牌头日期：8月30日 · 星期五
 const today = computed(() => {
-  const now = new Date();
+  const current = new Date();
   return {
-    date: now.toLocaleDateString(locale.value, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }),
-    weekday: now.toLocaleDateString(locale.value, { weekday: 'long' }),
+    date: current.toLocaleDateString(locale.value, { month: 'long', day: 'numeric' }),
+    weekday: current.toLocaleDateString(locale.value, { weekday: 'long' }),
   };
 });
 
-const sorted = computed(() => {
+// 面板分区（设计文档 5.1）：此时 / 将至 / 历时 / 已过期
+const groups = computed(() => {
   void now.value;
   const visible = showExpired.value
     ? entries.value
     : entries.value.filter((entry) => !isExpiredCountdown(entry, now.value));
-  return sortEntries(visible);
+  return groupedEntries(visible, now.value);
 });
 
-// 展示文案统一走共享工具，与编辑预览保持一致
-function daysText(entry: Entry): string {
-  return formatEntryText(entry, now.value, t);
+const sectionLabels: Record<EntrySection, string> = {
+  now: 'panel.sections.now',
+  soon: 'panel.sections.soon',
+  elapsed: 'panel.sections.elapsed',
+  past: 'panel.sections.past',
+};
+
+// 第二行类型标签与确切日期
+function typeLabel(type: EntryType): string {
+  return type === 'countdown' ? t('config.typeCountdown') : t('config.typeElapsed');
+}
+
+function dateLine(entry: Entry): string {
+  const target = entryDeadline(entry);
+  const date = target.toLocaleDateString(locale.value, { month: 'long', day: 'numeric' });
+  return entry.time ? `${date} ${entry.time}` : date;
 }
 
 // 已过期条目使用到期珊瑚色（设计语言 6.4），不再沿用条目自选色
@@ -67,19 +84,6 @@ function toggleExpanded(id: string) {
   expandedId.value = expandedId.value === id ? null : id;
 }
 
-// 缩略详情首行：完整日期 + 星期 + 时刻（若有）
-function detailLine(entry: Entry): string {
-  const target = entryDeadline(entry);
-  const date = target.toLocaleDateString(locale.value, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-  const weekday = target.toLocaleDateString(locale.value, { weekday: 'long' });
-  const prefix = entry.entryType === 'countdown' ? t('panel.detailTarget') : t('panel.detailStart');
-  return entry.time ? `${prefix} ${date} ${weekday} ${entry.time}` : `${prefix} ${date} ${weekday}`;
-}
-
 // 面板内直达主界面的动作
 function openCreate() {
   invoke('open_main_create').catch(() => {
@@ -87,8 +91,8 @@ function openCreate() {
   });
 }
 
-function openEditor(id: string) {
-  invoke('open_entry_editor', { id }).catch(() => {
+function openMain() {
+  invoke('open_main_create').catch(() => {
     /* 静默 */
   });
 }
@@ -112,11 +116,11 @@ onUnmounted(() => clearInterval(ticker));
 <template>
   <aside class="panel" @contextmenu.prevent="showContextMenu(null)">
     <header class="panel__header">
-      <span class="panel__date">{{ today.date }}</span>
-      <span class="panel__weekday">{{ today.weekday }}</span>
+      <span class="panel__brand">{{ t('panel.brand') }}</span>
+      <span class="panel__date">{{ today.date }} · {{ today.weekday }}</span>
     </header>
 
-    <div v-if="loaded && sorted.length === 0" class="panel__empty">
+    <div v-if="loaded && groups.length === 0" class="panel__empty">
       <!-- 极简水面与小岛轮廓（设计语言 5.6），不做成场景插画 -->
       <svg class="panel__empty-art" viewBox="0 0 120 44" fill="none" aria-hidden="true">
         <path
@@ -140,36 +144,48 @@ onUnmounted(() => clearInterval(ticker));
     </div>
 
     <template v-else>
-      <ul class="panel__list">
-        <li
-          v-for="entry in sorted"
-          :key="entry.id"
-          class="panel-item"
-          :class="{ 'panel-item--expanded': expandedId === entry.id }"
-          @click="toggleExpanded(entry.id)"
-          @contextmenu.prevent.stop="showContextMenu(entry.id)"
-        >
-          <div class="panel-item__row">
-            <span class="panel-item__color" :style="{ backgroundColor: entry.color }" />
-            <span class="panel-item__name" :title="entryTitle(entry)">{{ entry.name }}</span>
-            <span class="panel-item__days" :style="{ color: daysColor(entry) }">
-              {{ daysText(entry) }}
-            </span>
-          </div>
+      <div class="panel__scroll">
+        <section v-for="group in groups" :key="group.key" class="panel-section">
+          <h3 class="panel-section__title">{{ t(sectionLabels[group.key]) }}</h3>
+          <ul class="panel__list">
+            <li
+              v-for="entry in group.items"
+              :key="entry.id"
+              class="panel-item"
+              :class="{ 'panel-item--expanded': expandedId === entry.id }"
+              @click="toggleExpanded(entry.id)"
+              @contextmenu.prevent.stop="showContextMenu(entry.id)"
+            >
+              <div class="panel-item__row">
+                <span class="panel-item__color" :style="{ backgroundColor: entry.color }" />
+                <EntryTypeSymbol :type="entry.entryType" class="panel-item__symbol" />
+                <span class="panel-item__name" :title="entryTitle(entry)">{{ entry.name }}</span>
+                <span class="panel-item__days" :style="{ color: daysColor(entry) }">
+                  {{ formatEntryText(entry, now, t) }}
+                </span>
+              </div>
+              <div class="panel-item__meta">
+                {{ typeLabel(entry.entryType) }} · {{ dateLine(entry) }}
+              </div>
 
-          <!-- 缩略详情：完整日期时刻与备注 -->
-          <div v-if="expandedId === entry.id" class="panel-item__detail" @click.stop>
-            <span class="panel-item__detail-line">{{ detailLine(entry) }}</span>
-            <p v-if="entry.note" class="panel-item__detail-note">{{ entry.note }}</p>
-            <button class="panel-item__detail-edit" type="button" @click="openEditor(entry.id)">
-              {{ t('panel.editEntry') }}
-            </button>
-          </div>
-        </li>
-      </ul>
+              <!-- 缩略详情：备注与编辑入口 -->
+              <div v-if="expandedId === entry.id" class="panel-item__detail" @click.stop>
+                <p v-if="entry.note" class="panel-item__detail-note">{{ entry.note }}</p>
+                <button
+                  class="panel-item__detail-edit"
+                  type="button"
+                  @click="invoke('open_entry_editor', { id: entry.id })"
+                >
+                  {{ t('panel.editEntry') }}
+                </button>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </div>
 
-      <button class="panel__add panel__add--footer" type="button" @click="openCreate">
-        {{ t('panel.addEntry') }}
+      <button class="panel__footer" type="button" @click="openMain">
+        {{ t('panel.viewAll') }}
       </button>
     </template>
   </aside>
@@ -192,18 +208,130 @@ onUnmounted(() => clearInterval(ticker));
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 14px 16px 10px;
+  padding: 12px 16px 10px;
   border-bottom: 1px solid var(--ts-line);
+  flex-shrink: 0;
+}
+
+.panel__brand {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ts-primary-text);
 }
 
 .panel__date {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 12px;
+  opacity: 0.6;
 }
 
-.panel__weekday {
+.panel__scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 8px;
+}
+
+.panel-section + .panel-section {
+  margin-top: 10px;
+}
+
+.panel-section__title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ts-text-2);
+  margin: 0;
+  padding: 8px 8px 4px;
+  letter-spacing: 0.02em;
+}
+
+.panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-item {
+  display: flex;
+  flex-direction: column;
+  padding: 3px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.panel-item__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.panel-item:hover,
+.panel-item--expanded {
+  background-color: rgba(42, 156, 219, 0.07);
+}
+
+.panel-item__color {
+  width: 4px;
+  height: 24px;
+  /* 岛屿弧形签名造型 */
+  border-radius: 2px 2px 45% 45% / 2px 2px 30% 30%;
+  flex-shrink: 0;
+}
+
+.panel-item__symbol {
+  flex-shrink: 0;
+}
+
+.panel-item__name {
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
-  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-item__days {
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-item__meta {
+  font-size: 11px;
+  color: var(--ts-text-2);
+  padding: 0 0 4px 21px;
+}
+
+.panel-item__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 8px 21px;
+}
+
+.panel-item__detail-note {
+  font-size: 12px;
+  color: var(--ts-text-2);
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.panel-item__detail-edit {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--ts-primary-text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.panel-item__detail-edit:hover {
+  text-decoration: underline;
 }
 
 .panel__empty {
@@ -228,74 +356,6 @@ onUnmounted(() => clearInterval(ticker));
   font-weight: 500;
 }
 
-.panel__empty-hint {
-  font-size: 12px;
-  opacity: 0.55;
-}
-
-.panel__list {
-  list-style: none;
-  margin: 0;
-  padding: 6px 8px;
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.panel-item {
-  display: flex;
-  flex-direction: column;
-  padding: 4px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.panel-item__row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-}
-
-.panel-item:hover,
-.panel-item--expanded {
-  background-color: rgba(42, 156, 219, 0.07);
-}
-
-.panel-item__detail {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 2px 0 8px 14px;
-}
-
-.panel-item__detail-line {
-  font-size: 12px;
-  opacity: 0.65;
-}
-
-.panel-item__detail-note {
-  font-size: 12px;
-  opacity: 0.55;
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-.panel-item__detail-edit {
-  align-self: flex-start;
-  border: none;
-  background: none;
-  font-size: 12px;
-  color: var(--ts-primary-text);
-  cursor: pointer;
-  padding: 0;
-}
-
-.panel-item__detail-edit:hover {
-  text-decoration: underline;
-}
-
 .panel__add {
   border: none;
   background: none;
@@ -309,33 +369,19 @@ onUnmounted(() => clearInterval(ticker));
   text-decoration: underline;
 }
 
-.panel__add--footer {
+.panel__footer {
+  border: none;
   border-top: 1px solid var(--ts-line);
-  flex-shrink: 0;
-}
-
-.panel-item__color {
-  width: 5px;
-  height: 26px;
-  /* 岛屿弧形签名造型 */
-  border-radius: 2px 2px 45% 45% / 2px 2px 30% 30%;
-  flex-shrink: 0;
-}
-
-.panel-item__name {
-  flex: 1;
-  min-width: 0;
+  background: none;
   font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--ts-primary-text);
+  cursor: pointer;
+  padding: 10px 0;
+  flex-shrink: 0;
 }
 
-.panel-item__days {
-  font-size: 14px;
-  font-weight: 600;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
+.panel__footer:hover {
+  background-color: rgba(42, 156, 219, 0.07);
 }
 
 @keyframes panel-in {
@@ -353,23 +399,6 @@ onUnmounted(() => clearInterval(ticker));
 @media (prefers-reduced-motion: reduce) {
   .panel {
     animation: none;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .panel {
-    background-color: var(--ts-bg);
-    color: var(--ts-text);
-    border-color: var(--ts-line);
-  }
-
-  .panel__header {
-    border-bottom-color: var(--ts-line);
-  }
-
-  .panel-item:hover,
-  .panel-item--expanded {
-    background-color: rgba(98, 185, 235, 0.08);
   }
 }
 </style>
