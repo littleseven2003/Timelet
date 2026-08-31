@@ -20,7 +20,7 @@ defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
   width: 38px;
   height: 22px;
   border-radius: 11px;
-  background-color: rgba(0, 0, 0, 0.18);
+  background-color: var(--ts-line);
   position: relative;
   cursor: pointer;
   flex-shrink: 0;
@@ -45,15 +45,5 @@ defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
 
 .toggle:checked::after {
   transform: translateX(16px);
-}
-
-@media (prefers-color-scheme: dark) {
-  .toggle {
-    background-color: rgba(255, 255, 255, 0.22);
-  }
-
-  .toggle:checked {
-    background-color: var(--ts-primary);
-  }
 }
 </style>

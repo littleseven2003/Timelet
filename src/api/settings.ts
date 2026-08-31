@@ -9,6 +9,7 @@ export interface AppSettings {
   showExpired: boolean;
   /** 外观主题：跟随系统 / 浅色 / 深色 */
   theme?: ThemeMode;
+  panelLimit?: number;
 }
 
 export const getSettings = () => invoke<AppSettings>('settings_get');

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "config-window",
+  "description": "主窗口在未保存确认后关闭自身",
+  "windows": ["config"],
+  "permissions": ["core:window:allow-destroy"]
+}

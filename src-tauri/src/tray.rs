@@ -88,6 +88,7 @@ fn watch_panel_menu_events(app: &AppHandle) {
 #[derive(Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum EntryAction {
+    List,
     Create,
     Edit { id: String },
 }
@@ -103,19 +104,14 @@ pub fn open_main(app: &AppHandle, entry_id: Option<String>) {
 fn open_main_with(app: &AppHandle, action: Option<EntryAction>) {
     use tauri::Emitter;
 
+    let pending = app.state::<PendingEntryAction>();
+    *pending.0.lock().unwrap() = Some(action.unwrap_or(EntryAction::List));
     if let Some(window) = app.get_webview_window("config") {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
-        if let Some(action) = action {
-            let _ = app.emit("open-entry-action", action);
-        }
+        let _ = app.emit("open-entry-action", ());
         return;
-    }
-
-    if let Some(action) = action {
-        let pending = app.state::<PendingEntryAction>();
-        *pending.0.lock().unwrap() = Some(action);
     }
 
     let mut builder = tauri::webview::WebviewWindowBuilder::new(
@@ -123,7 +119,7 @@ fn open_main_with(app: &AppHandle, action: Option<EntryAction>) {
         "config",
         tauri::WebviewUrl::App("index.html".into()),
     )
-    .title("Timelet 设置")
+    .title("时屿 · Timelet")
     .min_inner_size(700.0, 520.0);
 
     // 恢复用户上次调整过的窗口大小与位置

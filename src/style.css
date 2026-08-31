@@ -124,3 +124,120 @@ body {
   color: var(--ts-text);
   background-color: transparent;
 }
+
+:root {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+  }
+}
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+button,
+input,
+textarea,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+:focus-visible {
+  outline: 2px solid var(--ts-blue);
+  outline-offset: 3px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--ts-line);
+  border-radius: 7px;
+  padding: 8px 12px;
+  min-height: 32px;
+  background: var(--ts-surface);
+  color: var(--ts-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) {
+  background: var(--ts-hover);
+}
+.btn--primary {
+  background: var(--ts-button);
+  border-color: var(--ts-button);
+  color: var(--ts-on-button);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--ts-button);
+  filter: brightness(0.95);
+}
+.btn--quiet {
+  background: none;
+  border-color: transparent;
+  padding-inline: 6px;
+}
+.btn--danger {
+  background: var(--ts-coral);
+  border-color: var(--ts-coral);
+  color: var(--ts-surface);
+}
+.text-input {
+  border: 1px solid var(--ts-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--ts-surface);
+  color: var(--ts-text);
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+  resize: vertical;
+}
+.text-input::placeholder {
+  color: var(--ts-text-2);
+}
+.error-notice {
+  color: var(--ts-coral);
+  border: 1px solid currentColor;
+  background: var(--ts-surface);
+  padding: 12px;
+  border-radius: 8px;
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.error-notice p {
+  margin-block: 6px;
+}
+.error-notice .btn {
+  margin: 5px 0 0 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

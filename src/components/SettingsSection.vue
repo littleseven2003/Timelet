@@ -1,198 +1,176 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
-import {
-  getSettings,
-  saveSettings,
-  type AppSettings,
-  type ThemeMode,
-} from '../api/settings';
+import { useSettings } from '../composables/useSettings';
+import type { AppSettings, ThemeMode } from '../api/settings';
 import SegmentedControl from './SegmentedControl.vue';
-
+import ToggleSwitch from './ToggleSwitch.vue';
 const { t } = useI18n();
-const settings = ref<AppSettings>({ launchAtLogin: false, showExpired: true, theme: 'system' });
+const { settings, loaded, busy, error, persist, retry } = useSettings();
+const actionError = ref('');
+const message = ref('');
 const launchEnabled = ref(false);
-const launchError = ref(false);
-
-const themeOptions = [
-  { value: 'system', label: '跟随系统' },
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' },
-];
-
-onMounted(async () => {
-  settings.value = await getSettings();
+const launchKnown = ref(false);
+const launchBusy = ref(false);
+const disabled = computed(() => !loaded.value || busy.value || !!error.value || launchBusy.value);
+const themes = computed(() =>
+  ['system', 'light', 'dark'].map((value) => ({ value, label: t(`settings.themes.${value}`) })),
+);
+const limits = computed(() =>
+  [5, 6, 7, 8].map((value) => ({ value: String(value), label: String(value) })),
+);
+async function readLaunch() {
   try {
     launchEnabled.value = await isEnabled();
-  } catch {
-    launchEnabled.value = settings.value.launchAtLogin;
+    launchKnown.value = true;
+  } catch (cause) {
+    actionError.value = `${t('settings.launchError')}：${String(cause)}`;
   }
-});
-
-async function persist(next: AppSettings) {
-  settings.value = next;
-  await saveSettings(next);
 }
-
-async function toggleLaunch(enabled: boolean) {
+onMounted(readLaunch);
+async function save(patch: Partial<AppSettings>) {
+  actionError.value = '';
+  message.value = '';
   try {
-    if (enabled) {
-      await enable();
-    } else {
-      await disable();
-    }
-    launchEnabled.value = enabled;
-    launchError.value = false;
-    await persist({ ...settings.value, launchAtLogin: enabled });
-  } catch (err) {
-    console.error('设置开机自启失败', err);
-    launchError.value = true;
-    try {
-      launchEnabled.value = await isEnabled();
-    } catch {
-      /* 保持原状态 */
-    }
+    await persist(patch);
+    message.value = t('common.saved');
+  } catch (cause) {
+    actionError.value = String(cause);
   }
 }
-
-async function setTheme(theme: string) {
-  await persist({ ...settings.value, theme: theme as ThemeMode });
+async function toggleLaunch(enabled: boolean) {
+  if (disabled.value || !launchKnown.value) return;
+  launchBusy.value = true;
+  actionError.value = '';
+  message.value = '';
+  const previous = launchEnabled.value;
+  try {
+    await (enabled ? enable() : disable());
+    try {
+      await persist({ launchAtLogin: enabled });
+    } catch (cause) {
+      try {
+        await (previous ? enable() : disable());
+      } catch {
+        actionError.value = t('settings.launchRollbackError');
+      }
+      throw cause;
+    }
+    message.value = t('common.saved');
+  } catch (cause) {
+    actionError.value = `${actionError.value} ${t('settings.launchError')}：${String(cause)}`;
+  } finally {
+    await readLaunch();
+    launchBusy.value = false;
+  }
 }
 </script>
 
 <template>
   <section class="settings">
-    <div class="settings-group">
-      <h3 class="settings-group__title">{{ t('settings.groupGeneral') }}</h3>
-      <label class="settings-row">
-        <div class="settings-row__text">
-          <span class="settings-row__label">{{ t('settings.launchAtLogin') }}</span>
-          <span class="settings-row__desc">{{ t('settings.launchAtLoginDesc') }}</span>
-          <span v-if="launchError" class="settings-row__error">{{ t('settings.launchError') }}</span>
-        </div>
-        <input
-          type="checkbox"
-          class="settings-switch"
-          :checked="launchEnabled"
-          @change="toggleLaunch(($event.target as HTMLInputElement).checked)"
-        />
-      </label>
-      <label class="settings-row">
-        <div class="settings-row__text">
-          <span class="settings-row__label">{{ t('settings.showExpired') }}</span>
-          <span class="settings-row__desc">{{ t('settings.showExpiredDesc') }}</span>
-        </div>
-        <input
-          type="checkbox"
-          class="settings-switch"
-          :checked="settings.showExpired"
-          @change="persist({ ...settings, showExpired: ($event.target as HTMLInputElement).checked })"
-        />
-      </label>
+    <div v-if="error" class="error-notice" role="alert">
+      {{ error }}<button class="btn" type="button" @click="retry">{{ t('common.retry') }}</button>
     </div>
-
-    <div class="settings-group">
-      <h3 class="settings-group__title">{{ t('settings.groupAppearance') }}</h3>
+    <div v-if="actionError" class="error-notice" role="alert">
+      {{ actionError
+      }}<button v-if="!launchKnown" class="btn" type="button" @click="readLaunch">
+        {{ t('common.retry') }}
+      </button>
+    </div>
+    <p v-if="message" class="saved" role="status">{{ message }}</p>
+    <fieldset :disabled="disabled">
+      <legend>{{ t('settings.groupGeneral') }}</legend>
+      <label class="settings-row"
+        ><span
+          ><strong>{{ t('settings.launchAtLogin') }}</strong
+          ><small>{{ t('settings.launchAtLoginDesc') }}</small></span
+        ><ToggleSwitch
+          :model-value="launchEnabled"
+          :disabled="!launchKnown"
+          @update:model-value="toggleLaunch"
+      /></label>
+      <label class="settings-row"
+        ><span
+          ><strong>{{ t('settings.showExpired') }}</strong
+          ><small>{{ t('settings.showExpiredDesc') }}</small></span
+        ><ToggleSwitch
+          :model-value="settings.showExpired"
+          @update:model-value="save({ showExpired: $event })"
+      /></label>
       <div class="settings-row">
-        <div class="settings-row__text">
-          <span class="settings-row__label">{{ t('settings.theme') }}</span>
-          <span class="settings-row__desc">{{ t('settings.themeDesc') }}</span>
-        </div>
-        <SegmentedControl
-          :model-value="settings.theme ?? 'system'"
-          :options="themeOptions"
-          @update:model-value="setTheme($event)"
+        <span
+          ><strong id="panel-limit-label">{{ t('settings.panelLimit') }}</strong
+          ><small>{{ t('settings.panelLimitDesc') }}</small></span
+        ><SegmentedControl
+          :model-value="String(settings.panelLimit ?? 6)"
+          :options="limits"
+          aria-labelledby="panel-limit-label"
+          @update:model-value="save({ panelLimit: Number($event) })"
         />
       </div>
-    </div>
+    </fieldset>
+    <fieldset :disabled="disabled">
+      <legend>{{ t('settings.groupAppearance') }}</legend>
+      <div class="settings-row">
+        <span
+          ><strong id="theme-label">{{ t('settings.theme') }}</strong
+          ><small>{{ t('settings.themeDesc') }}</small></span
+        ><SegmentedControl
+          :model-value="settings.theme ?? 'system'"
+          :options="themes"
+          aria-labelledby="theme-label"
+          @update:model-value="save({ theme: $event as ThemeMode })"
+        />
+      </div>
+    </fieldset>
   </section>
 </template>
 
 <style scoped>
 .settings {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: grid;
+  gap: 22px;
 }
-
-.settings-group {
-  border: 1px solid var(--ts-line);
-  border-radius: 10px;
-  background-color: var(--ts-surface);
-  padding: 12px 16px 6px;
+fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+  margin: 0;
 }
-
-.settings-group__title {
-  font-size: 12px;
-  font-weight: 600;
+legend {
   color: var(--ts-text-2);
-  margin: 0 0 4px;
+  font-size: 11px;
+  margin-bottom: 4px;
+  padding: 0;
 }
-
 .settings-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 10px 0;
-  cursor: pointer;
+  gap: 14px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--ts-line);
 }
-
-.settings-row + .settings-row {
-  border-top: 1px solid var(--ts-line);
+.settings-row > span {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  min-width: 170px;
 }
-
-.settings-row__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.settings-row__label {
-  font-size: 14px;
+.settings-row strong {
+  font-size: 13px;
   font-weight: 500;
 }
-
-.settings-row__desc {
-  font-size: 12px;
+.settings-row small {
   color: var(--ts-text-2);
+  font-size: 11px;
+  line-height: 1.7;
 }
-
-.settings-row__error {
+.saved {
+  color: var(--ts-teal);
   font-size: 12px;
-  color: var(--ts-coral);
-}
-
-.settings-switch {
-  appearance: none;
-  width: 38px;
-  height: 22px;
-  border-radius: 11px;
-  background-color: var(--ts-line);
-  position: relative;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background-color 0.2s;
-}
-
-.settings-switch::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background-color: #fff;
-  transition: transform 0.2s ease-out;
-}
-
-.settings-switch:checked {
-  background-color: var(--ts-button);
-}
-
-.settings-switch:checked::after {
-  transform: translateX(16px);
+  margin: 0;
 }
 </style>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 关于时屿（设计文档 5.9）：定位、理念与本地隐私说明；版本与开源地址在发布准备时补全
 import appIcon from '../assets/app-icon.png';
+import { version } from '../../package.json';
 </script>
 
 <template>
@@ -27,7 +28,7 @@ import appIcon from '../assets/app-icon.png';
 
     <div class="about__block">
       <h3 class="about__heading">版本</h3>
-      <p>v0.1.0 · GPL-3.0</p>
+      <p>v{{ version }} · GPL-3.0</p>
     </div>
   </section>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useClock } from '../composables/useClock';
 
 // 自研日期（可选时刻）选择器，替代原生控件；不引入第三方依赖
 const props = defineProps<{
@@ -31,6 +32,7 @@ watch(
   (value) => {
     if (!value) return;
     const [year, month] = value.split('-').map(Number);
+    if (!Number.isFinite(year) || !Number.isFinite(month)) return;
     viewYear.value = year!;
     viewMonth.value = month! - 1;
   },
@@ -50,7 +52,8 @@ function toIso(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-const todayIso = toIso(new Date());
+const now = useClock();
+const todayIso = computed(() => toIso(new Date(now.value)));
 
 const cells = computed<DayCell[]>(() => {
   const first = new Date(viewYear.value, viewMonth.value, 1);
@@ -63,7 +66,7 @@ const cells = computed<DayCell[]>(() => {
       iso: toIso(date),
       day: date.getDate(),
       inMonth: date.getMonth() === viewMonth.value,
-      isToday: toIso(date) === todayIso,
+      isToday: toIso(date) === todayIso.value,
     };
   });
 });
@@ -93,7 +96,7 @@ const quickOptions = computed(() => {
 });
 
 function nextMondayOffset(): number {
-  const weekday = new Date().getDay();
+  const weekday = new Date(now.value).getDay();
   return (8 - weekday) % 7 || 7;
 }
 
@@ -141,11 +144,13 @@ let holdDelay: ReturnType<typeof setTimeout> | undefined;
 let holdTimer: ReturnType<typeof setInterval> | undefined;
 
 function startHold(stepFn: () => void) {
+  stopHold();
   stepFn();
   holdDelay = setTimeout(() => {
     holdTimer = setInterval(stepFn, 110);
   }, 400);
   window.addEventListener('pointerup', stopHold, { once: true });
+  window.addEventListener('pointercancel', stopHold, { once: true });
 }
 
 function stopHold() {
@@ -153,7 +158,11 @@ function stopHold() {
   clearInterval(holdTimer);
 }
 
-onBeforeUnmount(stopHold);
+onBeforeUnmount(() => {
+  stopHold();
+  window.removeEventListener('pointerup', stopHold);
+  window.removeEventListener('pointercancel', stopHold);
+});
 
 // 时刻设为当前时间（取整到 5 分钟）
 function setNow() {
@@ -203,6 +212,8 @@ function setNow() {
           'picker__day--today': cell.isToday,
           'picker__day--selected': cell.iso === date,
         }"
+        :aria-label="cell.iso"
+        :aria-pressed="cell.iso === date"
         @click="emit('update:date', cell.iso)"
       >
         {{ cell.day }}
@@ -227,6 +238,7 @@ function setNow() {
             type="button"
             :aria-label="t('config.hourLabel') + ' +1'"
             @pointerdown="startHold(() => step('hour', 1))"
+            @click="$event.detail === 0 && step('hour', 1)"
           >
             ▲
           </button>
@@ -235,6 +247,7 @@ function setNow() {
             type="button"
             :aria-label="t('config.hourLabel') + ' -1'"
             @pointerdown="startHold(() => step('hour', -1))"
+            @click="$event.detail === 0 && step('hour', -1)"
           >
             ▼
           </button>
@@ -259,6 +272,7 @@ function setNow() {
             type="button"
             :aria-label="t('config.minuteLabel') + ' +1'"
             @pointerdown="startHold(() => step('minute', 1))"
+            @click="$event.detail === 0 && step('minute', 1)"
           >
             ▲
           </button>
@@ -267,6 +281,7 @@ function setNow() {
             type="button"
             :aria-label="t('config.minuteLabel') + ' -1'"
             @pointerdown="startHold(() => step('minute', -1))"
+            @click="$event.detail === 0 && step('minute', -1)"
           >
             ▼
           </button>
@@ -297,7 +312,7 @@ function setNow() {
 
 .picker__chip {
   flex: 1;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--ts-line);
   background: none;
   border-radius: 6px;
   padding: 5px 0;
@@ -385,7 +400,7 @@ function setNow() {
 }
 
 .picker__day--dim {
-  opacity: 0.3;
+  color: var(--ts-text-2);
 }
 
 .picker__day--today {
@@ -393,8 +408,8 @@ function setNow() {
 }
 
 .picker__day--selected {
-  background-color: var(--ts-primary);
-  color: #fff;
+  background-color: var(--ts-button);
+  color: var(--ts-on-button);
 }
 
 .picker__day--selected:hover {
@@ -461,54 +476,5 @@ function setNow() {
 
 .picker__colon {
   opacity: 0.5;
-}
-
-@media (prefers-color-scheme: dark) {
-  .picker {
-    background-color: var(--ts-surface);
-    border-color: var(--ts-line);
-  }
-
-  .picker__chip {
-    border-color: var(--ts-line);
-  }
-
-  .picker__chip:hover {
-    background-color: rgba(98, 185, 235, 0.1);
-    border-color: rgba(98, 185, 235, 0.5);
-  }
-
-  .picker__nav:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-  }
-
-  .picker__day:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-  }
-
-  .picker__day--selected {
-    background-color: var(--ts-primary);
-  }
-
-  .picker__time {
-    border-top-color: var(--ts-line);
-  }
-
-  .tstep {
-    background-color: var(--ts-bg);
-    border-color: var(--ts-line);
-  }
-
-  .tstep__btns {
-    border-left-color: var(--ts-line);
-  }
-
-  .picker__now {
-    color: var(--ts-primary-text);
-  }
-
-  .picker__now:hover {
-    background-color: rgba(98, 185, 235, 0.1);
-  }
 }
 </style>
