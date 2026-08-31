@@ -325,14 +325,23 @@ onMounted(async () => {
 
           <div class="entry-form__body">
             <!-- 类型是影响左右两栏语义的总开关，通栏置顶 -->
-            <div class="form-row form-row--type">
-              <span class="form-row__label">{{ t('config.fieldType') }}</span>
-              <SegmentedControl
-                :model-value="editing.entryType"
-                :options="typeOptions"
-                class="form-row__seg"
-                @update:model-value="onTypeChange($event as 'countdown' | 'elapsed')"
-              />
+            <div class="form-row form-row--column form-row--type">
+              <div class="form-row">
+                <span class="form-row__label">{{ t('config.fieldType') }}</span>
+                <SegmentedControl
+                  :model-value="editing.entryType"
+                  :options="typeOptions"
+                  class="form-row__seg"
+                  @update:model-value="onTypeChange($event as 'countdown' | 'elapsed')"
+                />
+              </div>
+              <span class="form-row__hint">
+                {{
+                  editing.entryType === 'countdown'
+                    ? t('config.hintCountdown')
+                    : t('config.hintElapsed')
+                }}
+              </span>
             </div>
 
             <!-- 左列：日期时间组件作为视觉锚点独占 -->
@@ -454,7 +463,7 @@ onMounted(async () => {
               {{ t('config.cancel') }}
             </button>
             <button class="btn btn--primary" type="submit" :disabled="!canSave">
-              {{ t('config.save') }}
+              {{ isNew ? t('config.createEntry') : t('config.saveChanges') }}
             </button>
           </div>
         </form>
@@ -1197,6 +1206,11 @@ onMounted(async () => {
 .form-row__label {
   font-size: 13px;
   opacity: 0.7;
+}
+
+.form-row__hint {
+  font-size: 12px;
+  color: var(--ts-text-2);
 }
 
 .entry-form__field {
