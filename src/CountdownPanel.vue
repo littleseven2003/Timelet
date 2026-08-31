@@ -6,7 +6,7 @@ import type { Entry, EntryType } from './types/entry';
 import { useEntries } from './composables/useEntries';
 import { getSettings } from './api/settings';
 import {
-  entryDeadline,
+  effectiveDeadline,
   formatEntryText,
   groupedEntries,
   isExpiredCountdown,
@@ -55,7 +55,7 @@ function typeLabel(type: EntryType): string {
 }
 
 function dateLine(entry: Entry): string {
-  const target = entryDeadline(entry);
+  const target = effectiveDeadline(entry, now.value);
   const date = target.toLocaleDateString(locale.value, { month: 'long', day: 'numeric' });
   return entry.time ? `${date} ${entry.time}` : date;
 }

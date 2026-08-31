@@ -40,22 +40,34 @@ function atTime(day: Date, hour: number, minute: number): Date {
   return result;
 }
 
-// 循环条目的下一次发生时间（每天/每个工作日），单次条目返回固定截止
+// 条目的有效发生时间：单次条目为固定截止；循环条目为不早于起始日期、不早于当前的下一次发生
 export function effectiveDeadline(entry: Entry, nowMs: number): Date {
   if (!entry.time || !entry.repeat) return entryDeadline(entry);
 
   const [hour, minute] = entry.time.split(':').map(Number);
+  // 循环锚点：起始日期上的目标时刻，下一次发生不得早于它
+  const anchor = entryDeadline(entry).getTime();
   let candidate = atTime(new Date(nowMs), hour!, minute!);
+
+  const advance = () => atTime(new Date(candidate.getTime() + 86_400_000), hour!, minute!);
   if (entry.repeat === 'workday') {
-    while (!isWorkday(candidate) || candidate.getTime() <= nowMs) {
-      candidate = atTime(new Date(candidate.getTime() + 86_400_000), hour!, minute!);
+    while (!isWorkday(candidate) || candidate.getTime() <= nowMs || candidate.getTime() < anchor) {
+      candidate = advance();
     }
     return candidate;
   }
-  if (candidate.getTime() <= nowMs) {
-    candidate = atTime(new Date(candidate.getTime() + 86_400_000), hour!, minute!);
+  while (candidate.getTime() <= nowMs || candidate.getTime() < anchor) {
+    candidate = advance();
   }
   return candidate;
+}
+
+// 有效发生日期的 ISO 串，供条目第二行确切日期与相对时间同源展示
+export function effectiveDateIso(entry: Entry, nowMs: number = Date.now()): string {
+  const date = effectiveDeadline(entry, nowMs);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 // 两个自然日相差的天数（本地时区，按日历日而非 24 小时制）

@@ -7,6 +7,7 @@ import type { DisplayUnit, Entry } from './types/entry';
 import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
 import {
+  effectiveDateIso,
   entryDisplayValue,
   formatEntryText,
   groupForConfig,
@@ -541,7 +542,7 @@ onMounted(async () => {
                       ? t('config.typeCountdown')
                       : t('config.typeElapsed')
                   }}
-                  · {{ entry.date }}
+                  · {{ effectiveDateIso(entry) }}
                 </span>
               </div>
               <span class="entry-item__days" :style="{ color: entry.color }">
@@ -589,7 +590,7 @@ onMounted(async () => {
                           ? t('config.typeCountdown')
                           : t('config.typeElapsed')
                       }}
-                      · {{ entry.date }}
+                      · {{ effectiveDateIso(entry) }}
                     </span>
                   </div>
                   <span class="entry-item__days" :style="{ color: entry.color }">
