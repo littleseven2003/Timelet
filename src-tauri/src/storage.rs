@@ -72,6 +72,10 @@ fn save(app: &AppHandle, entries: &[Entry]) -> Result<(), String> {
     let text = serde_json::to_string_pretty(&store).map_err(|e| e.to_string())?;
 
     let path = storage_path(app);
+    // 覆盖前保留现有文件为 .bak，写坏时可回退（尽力而为，不阻断本次写入）
+    if path.exists() {
+        fs::copy(&path, path.with_extension("json.bak")).ok();
+    }
     let tmp = path.with_extension("json.tmp");
     fs::write(&tmp, text).map_err(|e| e.to_string())?;
     fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
@@ -89,12 +93,14 @@ pub fn entry_save(
     state: State<'_, EntryStore>,
     entry: Entry,
 ) -> Result<(), String> {
-    let mut entries = state.0.lock().unwrap();
+    let mut entries = state.0.lock().unwrap().clone();
     match entries.iter_mut().find(|e| e.id == entry.id) {
         Some(existing) => *existing = entry,
         None => entries.push(entry),
     }
+    // 写盘成功后再更新内存并广播，失败时内存与磁盘保持一致
     save(&app, &entries)?;
+    *state.0.lock().unwrap() = entries;
     notify_changed(&app);
     Ok(())
 }
@@ -105,9 +111,10 @@ pub fn entry_delete(
     state: State<'_, EntryStore>,
     id: String,
 ) -> Result<(), String> {
-    let mut entries = state.0.lock().unwrap();
+    let mut entries = state.0.lock().unwrap().clone();
     entries.retain(|e| e.id != id);
     save(&app, &entries)?;
+    *state.0.lock().unwrap() = entries;
     notify_changed(&app);
     Ok(())
 }
@@ -124,13 +131,14 @@ pub fn entry_reorder(
     state: State<'_, EntryStore>,
     ids: Vec<String>,
 ) -> Result<(), String> {
-    let mut entries = state.0.lock().unwrap();
+    let mut entries = state.0.lock().unwrap().clone();
     for (index, id) in ids.iter().enumerate() {
         if let Some(entry) = entries.iter_mut().find(|e| e.id == *id) {
             entry.sort_index = Some(index as i64);
         }
     }
     save(&app, &entries)?;
+    *state.0.lock().unwrap() = entries;
     notify_changed(&app);
     Ok(())
 }

@@ -64,7 +64,8 @@ pub fn settings_set(
     fs::rename(&tmp, &file).map_err(|e| e.to_string())?;
     *state.0.lock().unwrap() = settings.clone();
     // 广播设置变更，让常驻面板与主窗口同步（如过期显示开关）
-    app.emit("settings-changed", settings).map_err(|e| e.to_string())?;
+    app.emit("settings-changed", settings)
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
