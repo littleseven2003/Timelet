@@ -30,6 +30,7 @@ pub fn run() {
             tray::show_panel_menu,
             tray::take_pending_action,
             tray::open_main_create,
+            tray::open_main_window,
             tray::open_entry_editor
         ])
         .run(tauri::generate_context!())

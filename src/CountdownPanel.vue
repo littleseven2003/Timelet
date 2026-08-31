@@ -92,7 +92,7 @@ function openCreate() {
 }
 
 function openMain() {
-  invoke('open_main_create').catch(() => {
+  invoke('open_main_window').catch(() => {
     /* 静默 */
   });
 }

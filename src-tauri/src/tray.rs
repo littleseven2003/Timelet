@@ -160,6 +160,12 @@ pub fn open_main_create(app: AppHandle) {
     open_main_with(&app, Some(EntryAction::Create));
 }
 
+// 面板"查看全部条目"打开主窗口列表（不进入新建表单）
+#[tauri::command]
+pub fn open_main_window(app: AppHandle) {
+    open_main(&app, None);
+}
+
 // 面板缩略详情"编辑"直达该条目的编辑表单
 #[tauri::command]
 pub fn open_entry_editor(app: AppHandle, id: String) {
