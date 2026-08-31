@@ -2,13 +2,24 @@
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
-import { getSettings, saveSettings, type AppSettings } from '../api/settings';
+import {
+  getSettings,
+  saveSettings,
+  type AppSettings,
+  type ThemeMode,
+} from '../api/settings';
+import SegmentedControl from './SegmentedControl.vue';
 
 const { t } = useI18n();
-const settings = ref<AppSettings>({ launchAtLogin: false, showExpired: true });
-// 自启开关的真实状态以系统自启项为准
+const settings = ref<AppSettings>({ launchAtLogin: false, showExpired: true, theme: 'system' });
 const launchEnabled = ref(false);
 const launchError = ref(false);
+
+const themeOptions = [
+  { value: 'system', label: '跟随系统' },
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' },
+];
 
 onMounted(async () => {
   settings.value = await getSettings();
@@ -35,7 +46,6 @@ async function toggleLaunch(enabled: boolean) {
     launchError.value = false;
     await persist({ ...settings.value, launchAtLogin: enabled });
   } catch (err) {
-    // 切换失败时回显系统真实状态并提示
     console.error('设置开机自启失败', err);
     launchError.value = true;
     try {
@@ -46,23 +56,20 @@ async function toggleLaunch(enabled: boolean) {
   }
 }
 
-async function toggleShowExpired(enabled: boolean) {
-  await persist({ ...settings.value, showExpired: enabled });
+async function setTheme(theme: string) {
+  await persist({ ...settings.value, theme: theme as ThemeMode });
 }
 </script>
 
 <template>
   <section class="settings">
-    <h2 class="settings__title">{{ t('config.nav.settings') }}</h2>
-
-    <div class="settings-card">
+    <div class="settings-group">
+      <h3 class="settings-group__title">{{ t('settings.groupGeneral') }}</h3>
       <label class="settings-row">
         <div class="settings-row__text">
           <span class="settings-row__label">{{ t('settings.launchAtLogin') }}</span>
           <span class="settings-row__desc">{{ t('settings.launchAtLoginDesc') }}</span>
-          <span v-if="launchError" class="settings-row__error">{{
-            t('settings.launchError')
-          }}</span>
+          <span v-if="launchError" class="settings-row__error">{{ t('settings.launchError') }}</span>
         </div>
         <input
           type="checkbox"
@@ -71,9 +78,6 @@ async function toggleShowExpired(enabled: boolean) {
           @change="toggleLaunch(($event.target as HTMLInputElement).checked)"
         />
       </label>
-
-      <div class="settings-card__divider" />
-
       <label class="settings-row">
         <div class="settings-row__text">
           <span class="settings-row__label">{{ t('settings.showExpired') }}</span>
@@ -83,37 +87,47 @@ async function toggleShowExpired(enabled: boolean) {
           type="checkbox"
           class="settings-switch"
           :checked="settings.showExpired"
-          @change="toggleShowExpired(($event.target as HTMLInputElement).checked)"
+          @change="persist({ ...settings, showExpired: ($event.target as HTMLInputElement).checked })"
         />
       </label>
+    </div>
+
+    <div class="settings-group">
+      <h3 class="settings-group__title">{{ t('settings.groupAppearance') }}</h3>
+      <div class="settings-row">
+        <div class="settings-row__text">
+          <span class="settings-row__label">{{ t('settings.theme') }}</span>
+          <span class="settings-row__desc">{{ t('settings.themeDesc') }}</span>
+        </div>
+        <SegmentedControl
+          :model-value="settings.theme ?? 'system'"
+          :options="themeOptions"
+          @update:model-value="setTheme($event)"
+        />
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
-/* 与条目管理页的分区卡片保持同一套视觉变量 */
 .settings {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.settings__title {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.settings-card {
+.settings-group {
   border: 1px solid var(--ts-line);
   border-radius: 10px;
   background-color: var(--ts-surface);
-  padding: 4px 16px;
+  padding: 12px 16px 6px;
 }
 
-.settings-card__divider {
-  height: 1px;
-  background-color: var(--ts-line);
+.settings-group__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ts-text-2);
+  margin: 0 0 4px;
 }
 
 .settings-row {
@@ -121,8 +135,12 @@ async function toggleShowExpired(enabled: boolean) {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 0;
+  padding: 10px 0;
   cursor: pointer;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--ts-line);
 }
 
 .settings-row__text {
@@ -138,7 +156,7 @@ async function toggleShowExpired(enabled: boolean) {
 
 .settings-row__desc {
   font-size: 12px;
-  opacity: 0.55;
+  color: var(--ts-text-2);
 }
 
 .settings-row__error {
@@ -151,7 +169,7 @@ async function toggleShowExpired(enabled: boolean) {
   width: 38px;
   height: 22px;
   border-radius: 11px;
-  background-color: rgba(0, 0, 0, 0.18);
+  background-color: var(--ts-line);
   position: relative;
   cursor: pointer;
   flex-shrink: 0;
@@ -167,29 +185,14 @@ async function toggleShowExpired(enabled: boolean) {
   height: 18px;
   border-radius: 50%;
   background-color: #fff;
-  transition: transform 0.2s;
+  transition: transform 0.2s ease-out;
 }
 
 .settings-switch:checked {
-  background-color: var(--ts-primary);
+  background-color: var(--ts-button);
 }
 
 .settings-switch:checked::after {
   transform: translateX(16px);
-}
-
-@media (prefers-color-scheme: dark) {
-  .settings-card {
-    background-color: var(--ts-surface);
-    border-color: var(--ts-line);
-  }
-
-  .settings-switch {
-    background-color: rgba(255, 255, 255, 0.22);
-  }
-
-  .settings-switch:checked {
-    background-color: var(--ts-primary);
-  }
 }
 </style>

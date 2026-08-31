@@ -8,54 +8,41 @@ import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
 import {
   effectiveDateIso,
-  entryDisplayValue,
   formatEntryText,
   groupForConfig,
   sortEntries,
 } from './utils/entries';
+import { getSettings, type AppSettings, type ThemeMode } from './api/settings';
 import DateTimePicker from './components/DateTimePicker.vue';
 import SegmentedControl from './components/SegmentedControl.vue';
 import ToggleSwitch from './components/ToggleSwitch.vue';
-import SettingsSection from './components/SettingsSection.vue';
 import EntryTypeSymbol from './components/EntryTypeSymbol.vue';
-
-type NavKey = 'entries' | 'settings' | 'about';
+import SettingsSection from './components/SettingsSection.vue';
+import AboutSection from './components/AboutSection.vue';
+import appIcon from './assets/app-icon.png';
 
 const { t, locale } = useI18n();
-const activeNav = ref<NavKey>('entries');
-const { entries, loaded, reload, upsert, remove, reorder } = useEntries();
+const {
+  entries,
+  loaded,
+  reload,
+  upsert,
+  remove,
+  reorder,
+  archive,
+  restore,
+  duplicate,
+  ensureChangeListener,
+} = useEntries();
 
-// 编辑态：editing 非空时内容区切换为表单
-const editing = ref<Entry | null>(null);
-const isNew = ref(false);
-// 删除确认弹窗：记录待删除条目
-const deleteTarget = ref<Entry | null>(null);
-// 列表行右键菜单：定位与目标条目
-const ctxMenu = ref<{ x: number; y: number; entry: Entry } | null>(null);
+// ---------- 导航与视图 ----------
+type NavKey = 'now' | 'countdown' | 'elapsed' | 'archive' | 'settings' | 'about';
+const activeNav = ref<NavKey>('now');
+const searchQuery = ref('');
 
-// 打开时按窗口尺寸收敛坐标，避免菜单越出窗口边缘
-function openCtxMenu(event: MouseEvent, entry: Entry) {
-  const width = 140;
-  const height = 120;
-  ctxMenu.value = {
-    x: Math.min(event.clientX, window.innerWidth - width),
-    y: Math.min(event.clientY, window.innerHeight - height),
-    entry,
-  };
-}
-
-async function togglePinned(entry: Entry) {
-  await upsert({ ...entry, pinned: !entry.pinned, updatedAt: new Date().toISOString() });
-}
-
-const sorted = computed(() => sortEntries(entries.value));
-const canSave = computed(() => !!editing.value?.name && !!editing.value?.date);
-
-// 共享时钟：分组、确切日期与头部日期依赖当前时间，跨日/唤醒后自动刷新
 const now = ref(Date.now());
 let ticker: ReturnType<typeof setInterval> | undefined;
 
-// 头部日期（此时视图）
 const today = computed(() => {
   const current = new Date(now.value);
   return {
@@ -64,57 +51,136 @@ const today = computed(() => {
   };
 });
 
-// 主窗口分组（设计文档 5.2）：今天 / 接下来 7 天 / 更晚；拖拽预览期间退回平铺
-const groups = computed(() => {
-  void now.value;
-  return groupForConfig(entries.value, now.value);
-});
-const flatGroups = computed(() => groups.value.flatMap((group) => group.items));
-
-// 预览卡文案：随名称/类型/日期输入实时变化
-const previewText = computed(() => {
-  if (!editing.value) return '';
-  return formatEntryText(editing.value, Date.now(), (key, params) => t(key, params ?? {}));
-});
-
-// 大数字预览：纯日期条目返回数值与单位，带时刻条目回退文本展示
-const previewValue = computed(() => {
-  if (!editing.value) return null;
-  return entryDisplayValue(editing.value);
-});
-
-// 大数字上方的状态小字
-const previewStatus = computed(() => {
-  const value = previewValue.value;
-  if (!value || !editing.value) return '';
-  if (editing.value.entryType === 'elapsed') return t('config.previewElapsed');
-  return value.value >= 0 ? t('config.previewLeft') : t('config.previewAgo');
-});
-
-// 新建/编辑时自动聚焦名称输入
-const nameInput = ref<HTMLInputElement | null>(null);
-watch(editing, (value) => {
-  if (value) void nextTick(() => nameInput.value?.focus());
-});
-
-// 当前颜色不在预设色板中时高亮自定义取色块
-const isCustomColor = computed(
-  () => editing.value != null && !(ENTRY_COLORS as readonly string[]).includes(editing.value.color),
+// ---------- 数据视图 ----------
+const activeEntries = computed(() => entries.value.filter((entry) => !entry.archived));
+const archiveEntries = computed(() =>
+  sortEntries(entries.value.filter((entry) => entry.archived)),
 );
 
-// 切换类型时，若仍在对应类型的默认色上则同步切换（倒计时=时屿蓝，正计时=累积岛绿）
-const TYPE_DEFAULT_COLOR = { countdown: '#2a9cdb', elapsed: '#368e76' } as const;
-
-function onTypeChange(next: 'countdown' | 'elapsed') {
-  if (!editing.value) return;
-  const previous = editing.value.entryType;
-  if (editing.value.color === TYPE_DEFAULT_COLOR[previous]) {
-    editing.value.color = TYPE_DEFAULT_COLOR[next];
-  }
-  editing.value.entryType = next;
+function searchHit(entry: Entry): boolean {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return true;
+  return (
+    entry.name.toLowerCase().includes(query) || (entry.note ?? '').toLowerCase().includes(query)
+  );
 }
 
-// 分段控件选项集中定义
+const navCounts = computed(() => ({
+  now: activeEntries.value.length,
+  countdown: activeEntries.value.filter((entry) => entry.entryType === 'countdown').length,
+  elapsed: activeEntries.value.filter((entry) => entry.entryType === 'elapsed').length,
+  archive: entries.value.filter((entry) => entry.archived).length,
+}));
+
+// 当前视图条目：导航类型过滤 + 搜索
+const viewEntries = computed(() => {
+  const base =
+    activeNav.value === 'countdown'
+      ? activeEntries.value.filter((entry) => entry.entryType === 'countdown')
+      : activeNav.value === 'elapsed'
+        ? activeEntries.value.filter((entry) => entry.entryType === 'elapsed')
+        : activeNav.value === 'archive'
+          ? archiveEntries.value
+          : activeEntries.value;
+  return base.filter(searchHit);
+});
+
+// 主列表分组：今天 / 接下来 7 天 / 更远（5.2）
+const groups = computed(() => {
+  void now.value;
+  return groupForConfig(viewEntries.value, now.value);
+});
+
+const isPlainView = computed(
+  () => activeNav.value === 'archive' || searchQuery.value.trim().length > 0,
+);
+const flatView = computed(() => sortEntries(viewEntries.value));
+
+const viewCount = computed(() =>
+  isPlainView.value
+    ? flatView.value.length
+    : groups.value.reduce((sum, group) => sum + group.items.length, 0),
+);
+
+// 侧栏导航项（此时 / 倒数日 / 正数日 / 归档）
+const navItems = computed(() => [
+  { key: 'now' as NavKey, label: t('config.nav.now'), count: navCounts.value.now },
+  { key: 'countdown' as NavKey, label: t('config.typeCountdown'), count: navCounts.value.countdown },
+  { key: 'elapsed' as NavKey, label: t('config.typeElapsed'), count: navCounts.value.elapsed },
+  { key: 'archive' as NavKey, label: t('config.nav.archive'), count: navCounts.value.archive },
+]);
+
+// 近屿摘要：仅「此时」且未搜索时展示一个置顶倒数日（5.3）
+const featured = computed(() => {
+  if (activeNav.value !== 'now' || searchQuery.value.trim()) return null;
+  const today0 = new Date(now.value).setHours(0, 0, 0, 0);
+  const candidates = sortEntries(
+    activeEntries.value.filter(
+      (entry) =>
+        entry.pinned &&
+        entry.entryType === 'countdown' &&
+        !entry.repeat &&
+        new Date(`${entry.date}T00:00:00`).getTime() >= today0,
+    ),
+  );
+  return candidates[0] ?? null;
+});
+
+// 时弧进度：起点为记录日期，终点为目标日期（5.7）
+const featuredArc = computed(() => {
+  const entry = featured.value;
+  if (!entry) return null;
+  const start = new Date(entry.createdAt);
+  start.setHours(0, 0, 0, 0);
+  const target = new Date(`${entry.date}T00:00:00`);
+  const today0 = new Date(now.value).setHours(0, 0, 0, 0);
+  const span = target.getTime() - start.getTime();
+  if (span <= 0) return null;
+  const progress = Math.min(1, Math.max(0, (today0 - start.getTime()) / span));
+  const circumference = 2 * Math.PI * 52;
+  return {
+    dash: `${circumference * 0.75 * progress} ${circumference}`,
+    days: Math.round((target.getTime() - today0) / 86_400_000),
+  };
+});
+
+const featuredDate = computed(() => {
+  if (!featured.value) return '';
+  const target = new Date(`${featured.value.date}T00:00:00`);
+  return `${target.toLocaleDateString(locale.value, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })} · ${target.toLocaleDateString(locale.value, { weekday: 'short' })}`;
+});
+
+// ---------- 主题与设置同步 ----------
+function applyTheme(mode?: ThemeMode) {
+  const root = document.documentElement;
+  if (!mode || mode === 'system') {
+    delete root.dataset.theme;
+  } else {
+    root.dataset.theme = mode;
+  }
+}
+
+function onSettings(next: AppSettings) {
+  applyTheme(next.theme);
+}
+
+// ---------- 编辑态 ----------
+const editing = ref<Entry | null>(null);
+const isNew = ref(false);
+const deleteTarget = ref<Entry | null>(null);
+const nameInput = ref<HTMLInputElement | null>(null);
+
+const canSave = computed(() => !!editing.value?.name && !!editing.value?.date);
+
+const previewText = computed(() => {
+  if (!editing.value) return '';
+  return formatEntryText(editing.value, now.value, (key, params) => t(key, params ?? {}));
+});
+
 const typeOptions = computed(() => [
   { value: 'countdown', label: t('config.typeCountdown') },
   { value: 'elapsed', label: t('config.typeElapsed') },
@@ -131,6 +197,76 @@ const repeatOptions = computed(() => [
   { value: 'workday', label: t('config.repeat.workday') },
 ]);
 
+const TYPE_DEFAULT_COLOR = { countdown: '#2a9cdb', elapsed: '#368e76' } as const;
+
+function onTypeChange(next: 'countdown' | 'elapsed') {
+  if (!editing.value) return;
+  const previous = editing.value.entryType;
+  if (editing.value.color === TYPE_DEFAULT_COLOR[previous]) {
+    editing.value.color = TYPE_DEFAULT_COLOR[next];
+  }
+  editing.value.entryType = next;
+}
+
+function toggleTime(enabled: boolean) {
+  if (!editing.value) return;
+  editing.value.time = enabled ? (editing.value.time ?? '09:00') : undefined;
+  if (!enabled) editing.value.repeat = undefined;
+}
+
+const isCustomColor = computed(
+  () => editing.value != null && !(ENTRY_COLORS as readonly string[]).includes(editing.value.color),
+);
+
+function openCreate() {
+  isNew.value = true;
+  editing.value = createDraft();
+}
+
+function openEdit(entry: Entry) {
+  isNew.value = false;
+  editing.value = { ...entry };
+  deleteTarget.value = null;
+}
+
+function cancelEdit() {
+  editing.value = null;
+  deleteTarget.value = null;
+}
+
+async function submit() {
+  if (!editing.value || !canSave.value) return;
+  const entry = { ...editing.value, updatedAt: new Date().toISOString() };
+  await upsert(entry);
+  cancelEdit();
+}
+
+async function confirmRemove() {
+  if (!deleteTarget.value) return;
+  const id = deleteTarget.value.id;
+  deleteTarget.value = null;
+  await remove(id);
+  if (editing.value?.id === id) cancelEdit();
+}
+
+// ---------- 生命周期与右键菜单 ----------
+const ctxMenu = ref<{ x: number; y: number; entry: Entry; archived: boolean } | null>(null);
+
+function openCtxMenu(event: MouseEvent, entry: Entry) {
+  const width = 150;
+  const height = 190;
+  ctxMenu.value = {
+    x: Math.min(event.clientX, window.innerWidth - width),
+    y: Math.min(event.clientY, window.innerHeight - height),
+    entry,
+    archived: !!entry.archived,
+  };
+}
+
+async function togglePinned(entry: Entry) {
+  await upsert({ ...entry, pinned: !entry.pinned, updatedAt: new Date().toISOString() });
+}
+
 // Esc：先关右键菜单，再关弹窗，再退出编辑态
 function onKeydown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return;
@@ -143,13 +279,10 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onKeydown));
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
-
-// 拖拽排序：拖动过程用本地预览列表渲染，落点后一次性持久化
+// ---------- 拖拽排序 ----------
 const dragId = ref<string | null>(null);
 const previewList = ref<Entry[] | null>(null);
-const displayList = computed(() => previewList.value ?? flatGroups.value);
+const displayList = computed(() => previewList.value ?? flatView.value);
 
 function onDragStart(id: string) {
   dragId.value = id;
@@ -157,7 +290,7 @@ function onDragStart(id: string) {
 
 function onDragEnter(id: string) {
   if (!dragId.value || dragId.value === id) return;
-  const base = previewList.value ?? sorted.value;
+  const base = previewList.value ?? flatView.value;
   const from = base.findIndex((entry) => entry.id === dragId.value);
   const to = base.findIndex((entry) => entry.id === id);
   if (from < 0 || to < 0) return;
@@ -179,73 +312,49 @@ function onDragEnd() {
   previewList.value = null;
 }
 
-function openCreate() {
-  isNew.value = true;
-  editing.value = createDraft();
-}
+// ---------- 自动聚焦 ----------
+watch(editing, (value) => {
+  if (value) void nextTick(() => nameInput.value?.focus());
+});
 
-function openEdit(entry: Entry) {
-  isNew.value = false;
-  editing.value = { ...entry };
-  deleteTarget.value = null;
-}
+onMounted(() => {
+  ticker = setInterval(() => {
+    now.value = Date.now();
+  }, 30_000);
+  window.addEventListener('keydown', onKeydown);
+});
 
-function cancelEdit() {
-  editing.value = null;
-  deleteTarget.value = null;
-}
+onBeforeUnmount(() => {
+  clearInterval(ticker);
+  window.removeEventListener('keydown', onKeydown);
+});
 
-// 开关时刻精度：开启时给默认时刻，关闭时移除并清空循环
-function toggleTime(enabled: boolean) {
-  if (!editing.value) return;
-  editing.value.time = enabled ? (editing.value.time ?? '09:00') : undefined;
-  if (!enabled) editing.value.repeat = undefined;
-}
+// 面板动作：新建或编辑指定条目
+type PendingAction = { kind: 'create' } | { kind: 'edit'; id: string };
 
-async function submit() {
-  if (!editing.value || !canSave.value) return;
-  const entry = { ...editing.value, updatedAt: new Date().toISOString() };
-  await upsert(entry);
-  cancelEdit();
-}
-
-async function confirmRemove() {
-  if (!deleteTarget.value) return;
-  const id = deleteTarget.value.id;
-  deleteTarget.value = null;
-  await remove(id);
-  // 从编辑表单内删除时同步关闭表单
-  if (editing.value?.id === id) cancelEdit();
-}
-
-// 从面板"编辑详情"或"新增条目"进入：数据就绪后应用动作
 async function applyPendingAction(action: PendingAction) {
-  activeNav.value = 'entries';
+  activeNav.value = 'now';
+  searchQuery.value = '';
   if (!loaded.value) await reload();
   if (action.kind === 'create') {
     openCreate();
     return;
   }
   const entry = entries.value.find((item) => item.id === action.id);
-  if (entry) openEdit(entry);
+  if (entry && !entry.archived) openEdit(entry);
 }
 
-// 面板动作载荷：新建或编辑指定条目
-type PendingAction = { kind: 'create' } | { kind: 'edit'; id: string };
-
-onMounted(() => {
-  ticker = setInterval(() => {
-    now.value = Date.now();
-  }, 30_000);
-});
-
-onBeforeUnmount(() => clearInterval(ticker));
-
 onMounted(async () => {
-  // 窗口先于面板动作创建时，取走暂存的待执行动作
+  await reload();
+  ensureChangeListener();
+  try {
+    onSettings(await getSettings());
+  } catch {
+    /* 读取失败保持默认 */
+  }
+  listen<AppSettings>('settings-changed', (event) => onSettings(event.payload));
   const pending = await invoke<PendingAction | null>('take_pending_action');
   if (pending) await applyPendingAction(pending);
-  // 窗口已存在时后续动作通过事件送达
   listen<PendingAction>('open-entry-action', (event) => {
     void applyPendingAction(event.payload);
   });
@@ -254,408 +363,457 @@ onMounted(async () => {
 
 <template>
   <div class="config">
-    <nav class="config__nav">
-      <button
-        v-for="key in ['entries', 'settings', 'about'] as NavKey[]"
-        :key="key"
-        class="config__nav-item"
-        :class="{ 'config__nav-item--active': activeNav === key }"
-        type="button"
-        @click="activeNav = key"
-      >
-        <svg
-          v-if="key === 'entries'"
-          class="config__nav-icon"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-        >
-          <path d="M5.5 4h8M5.5 8h8M5.5 12h8" />
-          <circle cx="2.5" cy="4" r="0.9" fill="currentColor" stroke="none" />
-          <circle cx="2.5" cy="8" r="0.9" fill="currentColor" stroke="none" />
-          <circle cx="2.5" cy="12" r="0.9" fill="currentColor" stroke="none" />
-        </svg>
-        <svg
-          v-else-if="key === 'settings'"
-          class="config__nav-icon"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-        >
-          <circle cx="8" cy="8" r="2.2" />
-          <path
-            d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6 11 5M5 11l-1.4 1.4"
-          />
-        </svg>
-        <svg
-          v-else
-          class="config__nav-icon"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-        >
-          <circle cx="8" cy="8" r="6" />
-          <path d="M8 7.4v3.4" />
-          <circle cx="8" cy="5" r="0.9" fill="currentColor" stroke="none" />
-        </svg>
-        {{ t(`config.nav.${key}`) }}
-      </button>
-      <div class="config__nav-brand">时屿 · Timelet</div>
-    </nav>
+    <!-- 整页背景意象（6.8）：海雾 / 远屿 / 潮线，静态低对比 -->
+    <div class="atmosphere" aria-hidden="true">
+      <svg viewBox="0 0 800 310" preserveAspectRatio="xMaxYMax slice" focusable="false">
+        <path
+          class="atmosphere__isle-far"
+          d="M240 310c72-30 115-60 193-65 91-6 98-70 188-74 78-4 126 29 179 8v131Z"
+        />
+        <path
+          class="atmosphere__isle-near"
+          d="M370 310c62-19 108-34 160-31 68-4 80 43 147 48 58 4 92-16 123-6v73Z"
+        />
+        <path
+          class="atmosphere__waterline"
+          d="M221 285c83-17 119-59 210-63 91-4 104-71 186-75 88-5 126 30 183 8"
+        />
+        <path
+          class="atmosphere__waterline"
+          d="M455 298c57-11 103-10 140-34 63-41 129-17 205-40"
+          opacity=".65"
+        />
+        <path
+          class="atmosphere__waterline"
+          d="M45 289c39-5 68-3 94-9m-56 22c40-3 62-5 89-12"
+          opacity=".55"
+        />
+      </svg>
+    </div>
 
-    <main class="config__main">
-      <!-- 条目管理 -->
-      <template v-if="activeNav === 'entries'">
-        <!-- 编辑表单 -->
-        <form v-if="editing" class="entry-form" @submit.prevent="submit">
-          <div class="entry-form__date">{{ today.date }} · {{ today.weekday }}</div>
-          <div class="entry-form__title-row">
-            <h2 class="entry-form__title">
-              {{ isNew ? t('config.addEntry') : t('config.editEntry') }}
-            </h2>
-            <!-- 危险操作与主操作分离：删除放在标题行右侧 -->
-            <button
-              v-if="!isNew"
-              class="entry-form__delete"
-              type="button"
-              @click="deleteTarget = editing"
-            >
-              {{ t('config.delete') }}
-            </button>
+    <div class="shell">
+      <!-- 侧栏 -->
+      <aside class="sidebar">
+        <div class="brand">
+          <img class="brand__icon" :src="appIcon" alt="" />
+          <div>
+            <div class="brand__name">时屿</div>
+            <div class="brand__wordmark">TIMELET</div>
           </div>
+        </div>
 
-          <!-- 实时预览：大数字 + 状态小字（带时刻条目回退文本）；时弧作为背景主意象 -->
-          <div class="entry-preview">
-            <svg
-              class="entry-preview__arc"
-              viewBox="0 0 96 96"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M20 74a40 40 0 1 1 56 0"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
+        <nav class="nav">
+          <button
+            v-for="item in navItems"
+            :key="item.key"
+            class="nav__item"
+            :class="{ 'nav__item--active': activeNav === item.key }"
+            type="button"
+            @click="activeNav = item.key"
+          >
+            {{ item.label }}
+            <small>{{ item.count }}</small>
+          </button>
+        </nav>
+
+        <div class="nav nav--low">
+          <button
+            class="nav__item"
+            :class="{ 'nav__item--active': activeNav === 'settings' }"
+            type="button"
+            @click="activeNav = 'settings'"
+          >
+            {{ t('config.nav.settings') }}
+          </button>
+          <button
+            class="nav__item"
+            :class="{ 'nav__item--active': activeNav === 'about' }"
+            type="button"
+            @click="activeNav = 'about'"
+          >
+            {{ t('config.nav.about') }}
+          </button>
+        </div>
+      </aside>
+
+      <!-- 内容区 -->
+      <main class="main">
+        <!-- 条目视图（此时 / 倒数日 / 正数日 / 归档） -->
+        <template v-if="activeNav !== 'settings' && activeNav !== 'about'">
+          <!-- 编辑表单：单列紧凑（5.5） -->
+          <form v-if="editing" class="editor" @submit.prevent="submit">
+            <div class="editor__title-row">
+              <h2 class="editor__title">
+                {{ isNew ? t('config.addEntry') : t('config.editEntry') }}
+              </h2>
+              <button
+                v-if="!isNew"
+                class="editor__delete"
+                type="button"
+                @click="deleteTarget = editing"
+              >
+                {{ t('config.delete') }}
+              </button>
+            </div>
+
+            <div class="form-row form-row--type">
+              <span class="form-row__label">{{ t('config.fieldType') }}</span>
+              <SegmentedControl
+                :model-value="editing.entryType"
+                :options="typeOptions"
+                class="form-row__seg"
+                @update:model-value="onTypeChange($event as 'countdown' | 'elapsed')"
               />
-              <circle cx="76" cy="70" r="5" fill="currentColor" />
-            </svg>
-            <span class="entry-preview__color" :style="{ backgroundColor: editing.color }" />
-            <div class="entry-preview__main">
-              <span class="entry-preview__name">{{ editing.name || t('config.previewName') }}</span>
-              <span v-if="previewText" class="entry-preview__date">{{ previewText }}</span>
             </div>
-            <div v-if="previewValue" class="entry-preview__big" :style="{ color: editing.color }">
-              <span class="entry-preview__status">{{ previewStatus }}</span>
-              <span class="entry-preview__number">
-                {{ Math.abs(previewValue.value) }}
-                <small>{{ t(`config.unit.${previewValue.unit}`) }}</small>
-              </span>
-            </div>
-            <span v-else class="entry-preview__days" :style="{ color: editing.color }">
-              {{ t('config.previewDays') }}
-            </span>
-          </div>
 
-          <div class="entry-form__body">
-            <!-- 类型是影响左右两栏语义的总开关，通栏置顶 -->
-            <div class="form-row form-row--column form-row--type">
-              <div class="form-row">
-                <span class="form-row__label">{{ t('config.fieldType') }}</span>
-                <SegmentedControl
-                  :model-value="editing.entryType"
-                  :options="typeOptions"
-                  class="form-row__seg"
-                  @update:model-value="onTypeChange($event as 'countdown' | 'elapsed')"
-                />
-              </div>
-              <span class="form-row__hint">
+            <div class="form-row form-row--column">
+              <span class="form-row__label">{{ t('config.fieldName') }}</span>
+              <input
+                ref="nameInput"
+                v-model="editing.name"
+                class="form-input form-input--hero"
+                type="text"
+                :placeholder="t('config.namePlaceholder')"
+                maxlength="30"
+              />
+            </div>
+
+            <div class="form-row form-row--column">
+              <span class="form-row__label">
                 {{
                   editing.entryType === 'countdown'
-                    ? t('config.hintCountdown')
-                    : t('config.hintElapsed')
+                    ? t('config.targetDate')
+                    : t('config.startDate')
                 }}
               </span>
+              <DateTimePicker
+                :date="editing.date"
+                :time="editing.time ?? null"
+                :with-time="!!editing.time"
+                :past="editing.entryType === 'elapsed'"
+                @update:date="editing.date = $event"
+                @update:time="editing.time = $event"
+              />
             </div>
 
-            <!-- 左列：日期时间组件作为视觉锚点独占 -->
-            <section class="form-section form-section--time">
-              <h3 class="form-section__title">{{ t('config.sectionTime') }}</h3>
+            <div class="form-row">
+              <span class="form-row__label">{{ t('config.includeTime') }}</span>
+              <ToggleSwitch
+                :model-value="!!editing.time"
+                @update:model-value="toggleTime($event)"
+              />
+            </div>
+
+            <div v-if="editing.time" class="form-row">
+              <span class="form-row__label">{{ t('config.fieldRepeat') }}</span>
+              <SegmentedControl
+                :model-value="editing.repeat ?? 'none'"
+                :options="repeatOptions"
+                @update:model-value="
+                  editing.repeat = $event === 'none' ? undefined : ($event as 'daily' | 'workday')
+                "
+              />
+            </div>
+
+            <div v-else class="form-row">
+              <span class="form-row__label">{{ t('config.fieldUnit') }}</span>
+              <SegmentedControl
+                :model-value="editing.displayUnit ?? 'day'"
+                :options="unitOptions"
+                @update:model-value="editing.displayUnit = $event as DisplayUnit"
+              />
+            </div>
+
+            <!-- 紧凑语义预览：类型 · 标题 · 相对时间 · 确切日期（5.5），承载在轻屿面上 -->
+            <div class="semantic-preview">
+              <EntryTypeSymbol :type="editing.entryType" class="semantic-preview__symbol" />
+              <div class="semantic-preview__main">
+                <span class="semantic-preview__name">
+                  {{ editing.name || t('config.previewName') }}
+                </span>
+                <span class="semantic-preview__text">
+                  {{ previewText || t('config.previewDays') }}
+                  <template v-if="editing.date"> · {{ effectiveDateIso(editing) }}</template>
+                </span>
+              </div>
+            </div>
+
+            <details class="more" :open="!!(editing.note || editing.pinned)">
+              <summary class="more__summary">{{ t('config.showMore') }}</summary>
               <div class="form-row form-row--column">
-                <span class="form-row__label">
-                  {{
-                    editing.entryType === 'countdown'
-                      ? t('config.targetDate')
-                      : t('config.startDate')
-                  }}
-                </span>
-                <DateTimePicker
-                  :date="editing.date"
-                  :time="editing.time ?? null"
-                  :with-time="!!editing.time"
-                  :past="editing.entryType === 'elapsed'"
-                  @update:date="editing.date = $event"
-                  @update:time="editing.time = $event"
-                />
-              </div>
-
-              <div class="form-row">
-                <span class="form-row__label">{{ t('config.includeTime') }}</span>
-                <ToggleSwitch
-                  :model-value="!!editing.time"
-                  @update:model-value="toggleTime($event)"
-                />
-              </div>
-
-              <div v-if="editing.time" class="form-row">
-                <span class="form-row__label">{{ t('config.fieldRepeat') }}</span>
-                <SegmentedControl
-                  :model-value="editing.repeat ?? 'none'"
-                  :options="repeatOptions"
-                  @update:model-value="
-                    editing.repeat = $event === 'none' ? undefined : ($event as 'daily' | 'workday')
-                  "
-                />
-              </div>
-
-              <div v-else class="form-row">
-                <span class="form-row__label">{{ t('config.fieldUnit') }}</span>
-                <SegmentedControl
-                  :model-value="editing.displayUnit ?? 'day'"
-                  :options="unitOptions"
-                  @update:model-value="editing.displayUnit = $event as DisplayUnit"
-                />
-              </div>
-            </section>
-
-            <!-- 右列：紧凑字段纵向排布，备注自动伸展补齐高度 -->
-            <div class="entry-form__side">
-              <section class="form-section">
-                <h3 class="form-section__title">{{ t('config.sectionBasic') }}</h3>
-                <input
-                  ref="nameInput"
-                  v-model="editing.name"
-                  class="entry-form__input entry-form__input--hero"
-                  type="text"
-                  :placeholder="t('config.namePlaceholder')"
-                  maxlength="30"
-                />
-              </section>
-
-              <section class="form-section form-section--appearance">
-                <h3 class="form-section__title">{{ t('config.sectionAppearance') }}</h3>
-                <div class="form-row form-row--column">
-                  <span class="form-row__label">{{ t('config.fieldColor') }}</span>
-                  <div class="entry-form__colors">
-                    <button
-                      v-for="color in ENTRY_COLORS"
-                      :key="color"
-                      type="button"
-                      class="entry-form__color"
-                      :class="{ 'entry-form__color--active': editing.color === color }"
-                      :style="{ backgroundColor: color }"
-                      :aria-label="color"
-                      @click="editing.color = color"
-                    />
-                    <!-- 自定义取色：色板外的颜色命中此项 -->
-                    <label
-                      class="entry-form__color entry-form__color--custom"
-                      :class="{ 'entry-form__color--active': isCustomColor }"
-                      :style="{ backgroundColor: editing.color }"
-                      :title="t('config.customColor')"
-                    >
-                      <input
-                        type="color"
-                        :value="editing.color"
-                        @input="editing.color = ($event.target as HTMLInputElement).value"
-                      />
-                    </label>
-                  </div>
-                </div>
-                <div class="form-row">
-                  <span class="form-row__label">{{ t('config.fieldPinned') }}</span>
-                  <ToggleSwitch v-model="editing.pinned" />
-                </div>
-                <div class="form-row form-row--column form-row--grow">
-                  <span class="form-row__label">{{ t('config.fieldNote') }}</span>
-                  <textarea
-                    v-model="editing.note"
-                    class="entry-form__input entry-form__note"
-                    :placeholder="t('config.notePlaceholder')"
-                    maxlength="100"
+                <span class="form-row__label">{{ t('config.fieldColor') }}</span>
+                <div class="color-list">
+                  <button
+                    v-for="color in ENTRY_COLORS"
+                    :key="color"
+                    type="button"
+                    class="color-dot"
+                    :class="{ 'color-dot--active': editing.color === color }"
+                    :style="{ backgroundColor: color }"
+                    :aria-label="color"
+                    @click="editing.color = color"
                   />
+                  <label
+                    class="color-dot color-dot--custom"
+                    :class="{ 'color-dot--active': isCustomColor }"
+                    :style="{ backgroundColor: editing.color }"
+                    :title="t('config.customColor')"
+                  >
+                    <input
+                      type="color"
+                      :value="editing.color"
+                      @input="editing.color = ($event.target as HTMLInputElement).value"
+                    />
+                  </label>
                 </div>
-              </section>
-            </div>
-          </div>
-
-          <div class="entry-form__footer">
-            <span class="entry-form__helper" :class="{ 'entry-form__helper--active': !canSave }">
-              {{ canSave ? '' : t('config.saveHint') }}
-            </span>
-            <button class="btn" type="button" @click="cancelEdit">
-              {{ t('config.cancel') }}
-            </button>
-            <button class="btn btn--primary" type="submit" :disabled="!canSave">
-              {{ isNew ? t('config.createEntry') : t('config.saveChanges') }}
-            </button>
-          </div>
-        </form>
-
-        <!-- 列表 -->
-        <template v-else>
-          <header class="entry-list__header">
-            <div>
-              <h2 class="entry-list__title">{{ t('config.nav.entries') }}</h2>
-              <div class="entry-list__date">{{ today.date }} · {{ today.weekday }}</div>
-            </div>
-            <button class="btn btn--primary" type="button" @click="openCreate">
-              {{ t('config.addEntry') }}
-            </button>
-          </header>
-
-          <div v-if="loaded && sorted.length === 0" class="entry-list__empty">
-            <!-- 极简水面与小岛轮廓（设计语言 5.6），与面板空状态一致 -->
-            <svg class="entry-list__empty-art" viewBox="0 0 120 44" fill="none" aria-hidden="true">
-              <path
-                d="M40 32 Q60 10 80 32"
-                stroke="var(--ts-primary)"
-                stroke-width="2"
-                stroke-linecap="round"
-                opacity="0.55"
-              />
-              <path
-                d="M6 33 Q34 29 60 33 T114 33"
-                stroke="var(--ts-line)"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
-            <p>{{ t('config.emptyList') }}</p>
-          </div>
-
-          <ul v-if="dragId" class="entry-list">
-            <!-- 拖拽中：平铺预览，保证跨组移动的视觉连续 -->
-            <li
-              v-for="entry in displayList"
-              :key="entry.id"
-              class="entry-item"
-              :class="{ 'entry-item--dragging': entry.id === dragId }"
-              draggable="true"
-              @dragstart="onDragStart(entry.id)"
-              @dragenter="onDragEnter(entry.id)"
-              @dragover.prevent
-              @drop.prevent="onDrop"
-              @dragend="onDragEnd"
-              @contextmenu.prevent="openCtxMenu($event, entry)"
-            >
-              <span class="entry-item__color" :style="{ backgroundColor: entry.color }" />
-              <EntryTypeSymbol :type="entry.entryType" class="entry-item__symbol" />
-              <div class="entry-item__info">
-                <span class="entry-item__name">
-                  {{ entry.name }}
-                  <span v-if="entry.pinned" class="entry-item__pin">{{
-                    t('config.pinnedTag')
-                  }}</span>
-                </span>
-                <span class="entry-item__meta">
-                  {{
-                    entry.entryType === 'countdown'
-                      ? t('config.typeCountdown')
-                      : t('config.typeElapsed')
-                  }}
-                  · {{ effectiveDateIso(entry) }}
-                </span>
               </div>
-              <span class="entry-item__days" :style="{ color: entry.color }">
-                {{ formatEntryText(entry, Date.now(), (key, params) => t(key, params ?? {})) }}
+              <div class="form-row">
+                <span class="form-row__label">{{ t('config.fieldPinned') }}</span>
+                <ToggleSwitch v-model="editing.pinned" />
+              </div>
+              <div class="form-row form-row--column">
+                <span class="form-row__label">{{ t('config.fieldNote') }}</span>
+                <textarea
+                  v-model="editing.note"
+                  class="form-input form-input--note"
+                  :placeholder="t('config.notePlaceholder')"
+                  maxlength="100"
+                />
+              </div>
+            </details>
+
+            <div class="editor__footer">
+              <span class="editor__helper" :class="{ 'editor__helper--active': !canSave }">
+                {{ canSave ? '' : t('config.saveHint') }}
               </span>
-              <div class="entry-item__actions" @mousedown.stop>
-                <button class="btn btn--small" type="button" @click="openEdit(entry)">
-                  {{ t('config.edit') }}
-                </button>
-                <button
-                  class="btn btn--small btn--danger"
-                  type="button"
-                  @click="deleteTarget = entry"
-                >
-                  {{ t('config.delete') }}
-                </button>
-              </div>
-            </li>
-          </ul>
+              <button class="btn" type="button" @click="cancelEdit">
+                {{ t('config.cancel') }}
+              </button>
+              <button class="btn btn--primary" type="submit" :disabled="!canSave">
+                {{ isNew ? t('config.createEntry') : t('config.saveChanges') }}
+              </button>
+            </div>
+          </form>
 
+          <!-- 列表视图 -->
           <template v-else>
-            <section v-for="group in groups" :key="group.key" class="entry-group">
-              <h3 class="entry-group__title">{{ t(`config.groups.${group.key}`) }}</h3>
-              <ul class="entry-list">
-                <li
-                  v-for="entry in group.items"
-                  :key="entry.id"
-                  class="entry-item"
-                  draggable="true"
-                  @dragstart="onDragStart(entry.id)"
-                  @contextmenu.prevent="openCtxMenu($event, entry)"
-                >
-                  <span class="entry-item__color" :style="{ backgroundColor: entry.color }" />
-                  <EntryTypeSymbol :type="entry.entryType" class="entry-item__symbol" />
-                  <div class="entry-item__info">
-                    <span class="entry-item__name">
-                      {{ entry.name }}
-                      <span v-if="entry.pinned" class="entry-item__pin">{{
-                        t('config.pinnedTag')
-                      }}</span>
-                    </span>
-                    <span class="entry-item__meta">
-                      {{
-                        entry.entryType === 'countdown'
-                          ? t('config.typeCountdown')
-                          : t('config.typeElapsed')
-                      }}
-                      · {{ effectiveDateIso(entry) }}
-                    </span>
-                  </div>
-                  <span class="entry-item__days" :style="{ color: entry.color }">
-                    {{ formatEntryText(entry, Date.now(), (key, params) => t(key, params ?? {})) }}
+            <header class="page-head">
+              <div>
+                <h2 class="page-head__title">
+                  {{ activeNav === 'now' ? t('config.nav.now') : t(`config.nav.${activeNav}`) }}
+                </h2>
+                <div class="page-head__date">{{ today.date }} · {{ today.weekday }}</div>
+              </div>
+              <button class="btn btn--primary" type="button" @click="openCreate">
+                {{ t('config.addEntry') }}
+              </button>
+            </header>
+
+            <!-- 近屿摘要：仅此时、未搜索（5.3） -->
+            <div v-if="featured" class="feature">
+              <svg
+                class="feature__surface"
+                viewBox="0 0 400 47"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path d="M0 47 L0 34 Q60 22 130 30 T260 26 T400 24 L400 47 Z" fill="currentColor" />
+              </svg>
+              <div class="feature__copy">
+                <span class="feature__label">{{ t('config.featuredLabel') }}</span>
+                <h3 class="feature__title">{{ featured.name }}</h3>
+                <span class="feature__date">{{ featuredDate }}</span>
+              </div>
+              <svg v-if="featuredArc" class="feature__arc" viewBox="0 0 120 110" fill="none">
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  stroke="var(--ts-line)"
+                  stroke-width="5"
+                  stroke-dasharray="245 327"
+                  stroke-linecap="round"
+                  transform="rotate(135 60 60)"
+                />
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  stroke="currentColor"
+                  stroke-width="5"
+                  stroke-linecap="round"
+                  :stroke-dasharray="featuredArc.dash"
+                  transform="rotate(135 60 60)"
+                />
+              </svg>
+              <div v-if="featuredArc" class="feature__days" :style="{ color: featured.color }">
+                {{ featuredArc.days }}
+                <small>{{ t('config.unit.day') }}</small>
+              </div>
+            </div>
+
+            <!-- 搜索 -->
+            <input
+              v-model="searchQuery"
+              class="search"
+              type="search"
+              :placeholder="t('config.searchPlaceholder')"
+            />
+
+            <div v-if="loaded && viewCount === 0" class="list-empty">
+              <svg class="list-empty__art" viewBox="0 0 120 44" fill="none" aria-hidden="true">
+                <path
+                  d="M40 32 Q60 10 80 32"
+                  stroke="var(--ts-brand)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  opacity="0.55"
+                />
+                <path
+                  d="M6 33 Q34 29 60 33 T114 33"
+                  stroke="var(--ts-line)"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <p>
+                {{
+                  searchQuery.trim()
+                    ? t('config.searchEmpty')
+                    : activeNav === 'archive'
+                      ? t('config.archiveEmpty')
+                      : t('config.emptyList')
+                }}
+              </p>
+            </div>
+
+            <!-- 拖拽中：平铺预览 -->
+            <ul v-if="dragId" class="entry-list">
+              <li
+                v-for="entry in displayList"
+                :key="entry.id"
+                class="entry-item"
+                :class="{ 'entry-item--dragging': entry.id === dragId }"
+                draggable="true"
+                @dragstart="onDragStart(entry.id)"
+                @dragenter="onDragEnter(entry.id)"
+                @dragover.prevent
+                @drop.prevent="onDrop"
+                @dragend="onDragEnd"
+                @contextmenu.prevent="openCtxMenu($event, entry)"
+              >
+                <EntryTypeSymbol :type="entry.entryType" class="entry-item__symbol" />
+                <div class="entry-item__info">
+                  <span class="entry-item__name">
+                    {{ entry.name }}
+                    <span v-if="entry.pinned" class="entry-item__pin">{{
+                      t('config.pinnedTag')
+                    }}</span>
                   </span>
-                  <div class="entry-item__actions" @mousedown.stop>
-                    <button class="btn btn--small" type="button" @click="openEdit(entry)">
-                      {{ t('config.edit') }}
-                    </button>
-                    <button
-                      class="btn btn--small btn--danger"
-                      type="button"
-                      @click="deleteTarget = entry"
-                    >
-                      {{ t('config.delete') }}
-                    </button>
-                  </div>
-                </li>
-              </ul>
-            </section>
+                  <span class="entry-item__meta">
+                    {{
+                      entry.entryType === 'countdown'
+                        ? t('config.typeCountdown')
+                        : t('config.typeElapsed')
+                    }}
+                    · {{ effectiveDateIso(entry) }}
+                  </span>
+                </div>
+                <span class="entry-item__days" :style="{ color: entry.color }">
+                  {{ formatEntryText(entry, now, (key, params) => t(key, params ?? {})) }}
+                </span>
+                <div class="entry-item__actions" @mousedown.stop>
+                  <button class="btn btn--small" type="button" @click="openEdit(entry)">
+                    {{ t('config.edit') }}
+                  </button>
+                  <button
+                    class="btn btn--small btn--danger"
+                    type="button"
+                    @click="deleteTarget = entry"
+                  >
+                    {{ t('config.delete') }}
+                  </button>
+                </div>
+              </li>
+            </ul>
+
+            <!-- 分组列表 -->
+            <template v-else>
+              <section v-for="group in groups" :key="group.key" class="entry-group">
+                <h3 class="entry-group__title">
+                  {{ t(`config.groups.${group.key}`) }}
+                </h3>
+                <ul class="entry-list">
+                  <li
+                    v-for="entry in group.items"
+                    :key="entry.id"
+                    class="entry-item"
+                    draggable="true"
+                    @dragstart="onDragStart(entry.id)"
+                    @contextmenu.prevent="openCtxMenu($event, entry)"
+                  >
+                    <EntryTypeSymbol :type="entry.entryType" class="entry-item__symbol" />
+                    <div class="entry-item__info">
+                      <span class="entry-item__name">
+                        {{ entry.name }}
+                        <span v-if="entry.pinned" class="entry-item__pin">{{
+                          t('config.pinnedTag')
+                        }}</span>
+                      </span>
+                      <span class="entry-item__meta">
+                        {{
+                          entry.entryType === 'countdown'
+                            ? t('config.typeCountdown')
+                            : t('config.typeElapsed')
+                        }}
+                        · {{ effectiveDateIso(entry) }}
+                      </span>
+                    </div>
+                    <span class="entry-item__days" :style="{ color: entry.color }">
+                      {{ formatEntryText(entry, now, (key, params) => t(key, params ?? {})) }}
+                    </span>
+                    <div class="entry-item__actions" @mousedown.stop>
+                      <button class="btn btn--small" type="button" @click="openEdit(entry)">
+                        {{ t('config.edit') }}
+                      </button>
+                      <button
+                        class="btn btn--small btn--danger"
+                        type="button"
+                        @click="deleteTarget = entry"
+                      >
+                        {{ t('config.delete') }}
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+              </section>
+            </template>
+
+            <footer class="list-foot">
+              {{ viewCount }} {{ t('config.entriesUnit') }}
+            </footer>
           </template>
         </template>
-      </template>
 
-      <!-- 通用设置 -->
-      <template v-else-if="activeNav === 'settings'">
-        <SettingsSection />
-      </template>
+        <!-- 通用设置 -->
+        <template v-else-if="activeNav === 'settings'">
+          <header class="page-head">
+            <h2 class="page-head__title">{{ t('config.nav.settings') }}</h2>
+          </header>
+          <SettingsSection />
+        </template>
 
-      <!-- 关于（M5 实装） -->
-      <template v-else>
-        <h2 class="config__placeholder-title">{{ t('config.nav.about') }}</h2>
-        <p class="config__placeholder">{{ t('config.aboutPlaceholder') }}</p>
-      </template>
-    </main>
+        <!-- 关于时屿 -->
+        <template v-else>
+          <header class="page-head">
+            <h2 class="page-head__title">{{ t('config.nav.about') }}</h2>
+          </header>
+          <AboutSection />
+        </template>
+      </main>
+    </div>
 
-    <!-- 列表行右键菜单：透明遮罩负责点击外部关闭 -->
+    <!-- 列表行右键菜单 -->
     <div
       v-if="ctxMenu"
       class="ctx-overlay"
@@ -667,13 +825,25 @@ onMounted(async () => {
           class="ctx-menu__item"
           type="button"
           @click="
-            openEdit(ctxMenu.entry);
+            ctxMenu.archived ? restore(ctxMenu.entry.id) : openEdit(ctxMenu.entry);
             ctxMenu = null;
           "
         >
-          {{ t('config.edit') }}
+          {{ ctxMenu.archived ? t('config.restore') : t('config.edit') }}
         </button>
         <button
+          v-if="!ctxMenu.archived"
+          class="ctx-menu__item"
+          type="button"
+          @click="
+            duplicate(ctxMenu.entry.id);
+            ctxMenu = null;
+          "
+        >
+          {{ t('config.duplicate') }}
+        </button>
+        <button
+          v-if="!ctxMenu.archived"
           class="ctx-menu__item"
           type="button"
           @click="
@@ -684,6 +854,18 @@ onMounted(async () => {
           {{ ctxMenu.entry.pinned ? t('config.unpin') : t('config.pinIt') }}
         </button>
         <button
+          v-if="!ctxMenu.archived"
+          class="ctx-menu__item"
+          type="button"
+          @click="
+            archive(ctxMenu.entry.id);
+            ctxMenu = null;
+          "
+        >
+          {{ t('config.archiveAction') }}
+        </button>
+        <button
+          v-else
           class="ctx-menu__item ctx-menu__item--danger"
           type="button"
           @click="
@@ -716,115 +898,318 @@ onMounted(async () => {
 
 <style scoped>
 .config {
+  position: relative;
   display: flex;
   min-height: 100vh;
-  background-color: var(--ts-bg);
+  background-color: var(--ts-surface);
   color: var(--ts-text);
+  isolation: isolate;
 }
 
-.config__nav {
-  width: 132px;
-  flex-shrink: 0;
-  padding: 12px 8px;
+/* 整页背景意象（6.8）：限定窗口边界，无指针事件 */
+.atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.atmosphere svg {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: auto;
+  opacity: 0.6;
+}
+
+.atmosphere__isle-far {
+  fill: var(--ts-isle-far);
+  opacity: 0.38;
+}
+
+.atmosphere__isle-near {
+  fill: var(--ts-isle-near);
+  opacity: 0.23;
+}
+
+.atmosphere__waterline {
+  stroke: var(--ts-current);
+  fill: none;
+  stroke-width: 1.4;
+  opacity: 0.27;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 146px minmax(0, 1fr);
+  width: 100%;
+}
+
+/* ---------- 侧栏 ---------- */
+.sidebar {
+  background-color: var(--ts-rail);
+  border-right: 1px solid var(--ts-line);
+  padding: 25px 12px 18px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  border-right: 1px solid var(--ts-line);
-  min-height: 100vh;
+  min-width: 0;
 }
 
-.config__nav-item {
-  border: none;
-  background: none;
-  text-align: left;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  cursor: pointer;
-  color: inherit;
+.brand {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin: 0 8px 26px;
+}
+
+.brand__icon {
+  width: 33px;
+  height: 33px;
+}
+
+.brand__name {
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  font-size: 17px;
+}
+
+.brand__wordmark {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--ts-text-2);
+  margin-top: 1px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.nav--low {
+  margin-top: auto;
+  padding-top: 30px;
+}
+
+.nav__item {
+  border: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  background: transparent;
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: var(--ts-text-2);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.config__nav-icon {
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  opacity: 0.75;
-}
-
-.config__nav-brand {
-  margin-top: auto;
-  padding: 10px 12px 2px;
+.nav__item small {
+  margin-left: auto;
   font-size: 11px;
-  opacity: 0.4;
-  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
 }
 
-.config__nav-item:hover {
-  background-color: rgba(42, 156, 219, 0.08);
+.nav__item:hover {
+  background-color: var(--ts-hover);
 }
 
-.config__nav-item--active {
-  background-color: rgba(42, 156, 219, 0.14);
-  color: var(--ts-primary-text);
-  font-weight: 500;
+.nav__item--active {
+  background-color: var(--ts-surface);
+  color: var(--ts-blue);
+  box-shadow: 0 1px 3px var(--ts-shadow);
 }
 
-.config__main {
-  flex: 1;
-  max-width: 780px;
-  margin: 0 auto;
-  padding: 20px 24px;
+/* ---------- 主内容 ---------- */
+.main {
+  padding: 23px 25px 18px;
+  min-width: 0;
   overflow-y: auto;
 }
 
-.entry-list__header {
+.page-head {
   display: flex;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
 }
 
-.entry-form__title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-/* 危险操作：幽灵样式与主操作区分离 */
-.entry-form__delete {
-  border: none;
-  background: none;
-  font-size: 12px;
-  color: var(--ts-coral);
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
-}
-
-.entry-form__delete:hover {
-  background-color: rgba(201, 79, 85, 0.1);
-}
-
-.entry-list__title,
-.config__placeholder-title,
-.entry-form__title {
-  font-size: 16px;
-  font-weight: 600;
+.page-head__title {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   margin: 0;
 }
 
-.entry-list__date,
-.entry-form__date {
-  font-size: 12px;
+.page-head__date {
   color: var(--ts-text-2);
+  font-size: 12px;
   margin-top: 3px;
 }
 
-.entry-form__date {
-  margin-bottom: 10px;
+/* ---------- 按钮 ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ts-line);
+  border-radius: 8px;
+  background-color: var(--ts-surface);
+  padding: 7px 11px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  color: inherit;
+}
+
+.btn:hover {
+  background-color: var(--ts-hover);
+}
+
+.btn--primary {
+  background-color: var(--ts-button);
+  color: var(--ts-on-button);
+  border-color: transparent;
+}
+
+.btn--primary:hover {
+  filter: brightness(1.06);
+  background-color: var(--ts-button);
+}
+
+.btn--small {
+  padding: 4px 9px;
+}
+
+.btn--danger {
+  color: var(--ts-coral);
+}
+
+.btn--danger-solid {
+  background-color: var(--ts-coral);
+  border-color: var(--ts-coral);
+  color: #fff;
+}
+
+.btn--danger-solid:hover {
+  background-color: var(--ts-coral);
+  filter: brightness(1.06);
+}
+
+/* ---------- 近屿摘要 ---------- */
+.feature {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 151px;
+  align-items: center;
+  min-height: 167px;
+  margin-bottom: 20px;
+  background-color: var(--ts-focus);
+  border-radius: 12px 12px 28px 12px;
+  overflow: hidden;
+  padding: 19px 15px 18px 20px;
+}
+
+.feature__surface {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 47px;
+  color: var(--ts-island);
+  pointer-events: none;
+}
+
+.feature__copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.feature__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ts-blue);
+  font-size: 11px;
+  margin-bottom: 11px;
+  letter-spacing: 0.03em;
+}
+
+.feature__title {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.feature__date {
+  font-size: 12px;
+  color: var(--ts-text-2);
+  margin-top: 5px;
+  display: block;
+}
+
+.feature__arc {
+  position: relative;
+  z-index: 1;
+  width: 144px;
+  height: 134px;
+  margin: -20px -6px -30px 0;
+  color: var(--ts-blue);
+}
+
+.feature__days {
+  position: relative;
+  z-index: 1;
+  font-size: 40px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.feature__days small {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ts-text-2);
+  margin-left: 3px;
+}
+
+/* ---------- 搜索 ---------- */
+.search {
+  width: 100%;
+  border: 1px solid var(--ts-line);
+  border-radius: 8px;
+  background-color: var(--ts-surface);
+  color: inherit;
+  font-size: 13px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+}
+
+.search:focus {
+  outline: 2px solid var(--ts-brand);
+  outline-offset: -1px;
+}
+
+/* ---------- 列表 ---------- */
+.entry-group + .entry-group {
+  margin-top: 16px;
+}
+
+.entry-group__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ts-text-2);
+  margin: 0 0 8px;
 }
 
 .entry-list {
@@ -833,18 +1218,20 @@ onMounted(async () => {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .entry-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--ts-line);
-  border-radius: 10px;
-  background-color: var(--ts-surface);
+  padding: 10px 12px;
+  border-radius: 9px;
   cursor: grab;
+}
+
+.entry-item:hover {
+  background-color: var(--ts-hover);
 }
 
 .entry-item--dragging {
@@ -853,15 +1240,7 @@ onMounted(async () => {
 
 .entry-item__symbol {
   flex-shrink: 0;
-  opacity: 0.65;
-}
-
-.entry-item__color {
-  width: 10px;
-  height: 32px;
-  /* 签名造型：底部圆弧的「岛屿」色条，呼应产品图标意象 */
-  border-radius: 3px 3px 45% 45% / 3px 3px 30% 30%;
-  flex-shrink: 0;
+  opacity: 0.7;
 }
 
 .entry-item__info {
@@ -879,20 +1258,26 @@ onMounted(async () => {
 
 .entry-item__pin {
   font-size: 11px;
-  color: #0067c0;
+  color: var(--ts-blue);
   margin-left: 6px;
 }
 
 .entry-item__meta {
   font-size: 12px;
-  opacity: 0.55;
+  color: var(--ts-text-2);
+}
+
+.entry-item__days {
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .entry-item__actions {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
-  /* 桌面惯例：操作按钮悬停浮现，降低行内噪音（键盘 focus 时同样可见） */
   opacity: 0;
   transition: opacity 0.15s ease-out;
 }
@@ -902,81 +1287,246 @@ onMounted(async () => {
   opacity: 1;
 }
 
-.entry-group + .entry-group {
+.list-foot {
   margin-top: 16px;
-}
-
-.entry-group__title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ts-text-2);
-  margin: 0 0 8px;
-}
-
-.entry-list__empty {
   text-align: center;
-  opacity: 0.55;
-  font-size: 13px;
+  font-size: 12px;
+  color: var(--ts-text-2);
+}
+
+.list-empty {
+  text-align: center;
   padding: 40px 0;
+  font-size: 13px;
+  color: var(--ts-text-2);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
 }
 
-.entry-list__empty p {
+.list-empty p {
   margin: 0;
 }
 
-.entry-list__empty-art {
+.list-empty__art {
   width: 120px;
   height: 44px;
 }
 
-.btn {
-  border: 1px solid var(--ts-line);
-  background-color: var(--ts-surface);
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-size: 13px;
+/* ---------- 编辑表单（单列紧凑，5.5） ---------- */
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 560px;
+}
+
+.editor__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.editor__title {
+  font-size: 22px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.editor__date {
+  font-size: 12px;
+  color: var(--ts-text-2);
+  margin-bottom: 10px;
+}
+
+.editor__delete {
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--ts-coral);
   cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.editor__delete:hover {
+  background-color: rgba(183, 70, 80, 0.1);
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.form-row--column {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.form-row__label {
+  font-size: 13px;
+  color: var(--ts-text-2);
+}
+
+.form-row--type {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.form-row--type .form-row {
+  justify-content: flex-start;
+}
+
+.form-row__seg {
+  max-width: 300px;
+}
+
+.form-input {
+  border: 1px solid var(--ts-line);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-size: 13px;
+  background-color: var(--ts-surface);
   color: inherit;
 }
 
-.btn:hover {
-  border-color: var(--ts-primary);
+.form-input--hero {
+  font-size: 15px;
+  font-weight: 500;
+  padding: 10px 12px;
 }
 
-.btn:disabled {
-  opacity: 0.45;
-  cursor: default;
+.form-input:focus {
+  outline: 2px solid var(--ts-brand);
+  outline-offset: -1px;
 }
 
-.btn--primary {
-  background-color: var(--ts-primary);
-  border-color: var(--ts-primary);
-  color: #fff;
+.form-input--note {
+  resize: none;
+  font-family: inherit;
+  line-height: 1.5;
 }
 
-.btn--primary:hover:not(:disabled) {
-  filter: brightness(1.08);
+/* 紧凑语义预览（轻屿面） */
+.semantic-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background-color: var(--ts-focus);
+  border-radius: 10px 10px 22px 10px;
 }
 
-.btn--danger {
-  color: var(--ts-coral);
+.semantic-preview__symbol {
+  color: var(--ts-text-2);
 }
 
-.btn--danger-solid {
-  background-color: var(--ts-coral);
-  border-color: var(--ts-coral);
-  color: #fff;
+.semantic-preview__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
-.btn--danger-solid:hover {
-  filter: brightness(1.08);
+.semantic-preview__name {
+  font-size: 14px;
+  font-weight: 500;
 }
 
-/* 列表行右键菜单 */
+.semantic-preview__text {
+  font-size: 12px;
+  color: var(--ts-text-2);
+}
+
+/* 更多选项折叠 */
+.more {
+  border-top: 1px solid var(--ts-line);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.more__summary {
+  font-size: 12px;
+  color: var(--ts-text-2);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.more__summary:hover {
+  color: var(--ts-text);
+}
+
+.more[open] .more__summary {
+  margin-bottom: 2px;
+}
+
+.more[open] > summary::after {
+  content: ' ▴';
+}
+
+.more > summary::after {
+  content: ' ▾';
+}
+
+.color-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.color-dot--active {
+  border-color: var(--ts-text);
+}
+
+.color-dot--custom {
+  position: relative;
+  border-style: dashed;
+  border-color: var(--ts-line);
+}
+
+.color-dot--custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.editor__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ts-line);
+}
+
+.editor__helper {
+  flex: 1;
+  font-size: 12px;
+  color: var(--ts-text-2);
+}
+
+.editor__helper--active {
+  color: var(--ts-amber);
+  opacity: 0.95;
+}
+
+/* ---------- 右键菜单与弹窗 ---------- */
 .ctx-overlay {
   position: fixed;
   inset: 0;
@@ -985,12 +1535,12 @@ onMounted(async () => {
 
 .ctx-menu {
   position: fixed;
-  min-width: 120px;
+  min-width: 130px;
   padding: 4px;
-  border-radius: 8px;
+  border-radius: 9px;
   background-color: var(--ts-surface);
   border: 1px solid var(--ts-line);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 8px 28px var(--ts-shadow);
   display: flex;
   flex-direction: column;
 }
@@ -1007,18 +1557,17 @@ onMounted(async () => {
 }
 
 .ctx-menu__item:hover {
-  background-color: rgba(42, 156, 219, 0.08);
+  background-color: var(--ts-hover);
 }
 
 .ctx-menu__item--danger {
   color: var(--ts-coral);
 }
 
-/* 删除确认弹窗 */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.35);
+  background-color: rgba(23, 35, 45, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1030,7 +1579,7 @@ onMounted(async () => {
   padding: 18px 20px;
   border-radius: 12px;
   background-color: var(--ts-surface);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 12px 40px var(--ts-shadow);
 }
 
 .modal__title {
@@ -1041,7 +1590,7 @@ onMounted(async () => {
 
 .modal__text {
   font-size: 13px;
-  opacity: 0.7;
+  color: var(--ts-text-2);
   margin: 0 0 16px;
   line-height: 1.5;
 }
@@ -1050,345 +1599,5 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.btn--small {
-  padding: 4px 10px;
-  font-size: 12px;
-}
-
-.entry-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* 实时预览卡：结构对齐面板条目 */
-.entry-preview {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--ts-line);
-  border-radius: 10px;
-  background-color: var(--ts-surface);
-  overflow: hidden;
-}
-
-/* 时弧：开放圆弧 + 目标端点，颜色随条目色，仅作背景意象 */
-.entry-preview__arc {
-  position: absolute;
-  right: -14px;
-  top: -30px;
-  width: 96px;
-  height: 96px;
-  opacity: 0.14;
-  pointer-events: none;
-}
-
-.entry-preview__color {
-  width: 5px;
-  height: 28px;
-  /* 岛屿弧形签名造型 */
-  border-radius: 2px 2px 45% 45% / 2px 2px 30% 30%;
-  flex-shrink: 0;
-}
-
-.entry-preview__name {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.entry-preview__days {
-  font-size: 14px;
-  font-weight: 600;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.entry-preview__main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.entry-preview__date {
-  font-size: 12px;
-  opacity: 0.55;
-}
-
-/* 大数字预览（LikeDay 风格） */
-.entry-preview__big {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0;
-}
-
-.entry-preview__status {
-  font-size: 11px;
-  opacity: 0.55;
-}
-
-.entry-preview__number {
-  font-size: 30px;
-  font-weight: 700;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-
-.entry-preview__number small {
-  font-size: 13px;
-  font-weight: 500;
-  margin-left: 2px;
-}
-
-.entry-item__days {
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-/* 双栏网格：预览与类型通栏 → 左侧日历锚点 + 右侧紧凑字段列 */
-.entry-form__body {
-  display: grid;
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
-  grid-template-areas:
-    'preview preview'
-    'type type'
-    'time side';
-  gap: 12px;
-  align-items: stretch;
-}
-
-.entry-preview {
-  grid-area: preview;
-}
-
-.form-row--type {
-  grid-area: type;
-}
-
-.form-row--type .form-row__seg {
-  flex: 1;
-  max-width: 240px;
-}
-
-.form-section--time {
-  grid-area: time;
-}
-
-.entry-form__side {
-  grid-area: side;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.form-section--appearance {
-  flex: 1;
-}
-
-.form-section--appearance .entry-form__note {
-  flex: 1;
-  min-height: 56px;
-}
-
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border: 1px solid var(--ts-line);
-  border-radius: 10px;
-  background-color: var(--ts-surface);
-}
-
-.form-section__title {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.55;
-  margin: 0;
-}
-
-.entry-form__input--hero {
-  font-size: 16px;
-  font-weight: 600;
-  padding: 10px 12px;
-}
-
-.entry-form__note {
-  resize: none;
-  font-family: inherit;
-  line-height: 1.5;
-}
-
-.entry-form__footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-/* 保存前置提示：名称或日期未完成时说明原因 */
-.entry-form__helper {
-  flex: 1;
-  font-size: 12px;
-  opacity: 0.55;
-}
-
-.entry-form__helper--active {
-  opacity: 0.85;
-  color: var(--ts-amber);
-}
-
-.form-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.form-row--column {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.form-row--grow {
-  flex: 1;
-}
-
-.form-row__label {
-  font-size: 13px;
-  opacity: 0.7;
-}
-
-.form-row__hint {
-  font-size: 12px;
-  color: var(--ts-text-2);
-}
-
-.entry-form__field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.entry-form__field--row {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.entry-form__label {
-  font-size: 13px;
-  opacity: 0.7;
-}
-
-.entry-form__input {
-  border: 1px solid var(--ts-line);
-  border-radius: 6px;
-  padding: 7px 10px;
-  font-size: 13px;
-  background-color: var(--ts-surface);
-  color: inherit;
-}
-
-.entry-form__colors {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.entry-form__color {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-  padding: 0;
-}
-
-.entry-form__color--active {
-  border-color: var(--ts-text);
-}
-
-/* 自定义取色块：虚线描边示意可自定义，内嵌隐藏的原生取色控件 */
-.entry-form__color--custom {
-  position: relative;
-  border-style: dashed;
-}
-
-.entry-form__color--custom input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.entry-form__actions {
-  display: flex;
-  gap: 8px;
-}
-
-.config__placeholder-title {
-  margin-bottom: 8px;
-}
-
-.config__placeholder {
-  font-size: 13px;
-  opacity: 0.55;
-}
-
-@media (prefers-color-scheme: dark) {
-  .config {
-    background-color: var(--ts-bg);
-    color: var(--ts-text);
-  }
-
-  .config__nav {
-    border-right-color: var(--ts-line);
-  }
-
-  .config__nav-item:hover {
-    background-color: rgba(98, 185, 235, 0.08);
-  }
-
-  .config__nav-item--active {
-    background-color: rgba(98, 185, 235, 0.16);
-    color: var(--ts-primary-text);
-  }
-
-  .entry-item,
-  .btn,
-  .entry-form__input,
-  .entry-preview,
-  .form-section,
-  .ctx-menu,
-  .modal {
-    background-color: var(--ts-surface);
-    border-color: var(--ts-line);
-  }
-
-  .entry-form__footer {
-    border-top-color: var(--ts-line);
-  }
-
-  .config__nav-item--active .config__nav-icon {
-    opacity: 1;
-  }
 }
 </style>

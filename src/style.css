@@ -1,30 +1,110 @@
-/* 设计语言 tokens：对应 docs/DESIGN.md 第 6.4 节色彩系统，新增界面一律引用变量 */
+/* 设计语言 tokens：docs/DESIGN.md 6.4 定稿值；界面一律引用变量 */
 :root {
-  --ts-bg: #f5f8fa; /* 海雾背景 */
-  --ts-surface: #ffffff; /* 岛面白 */
-  --ts-primary: #2a9cdb; /* 时屿蓝 */
-  /* 小字号文本/链接用的深阶时屿蓝（白底对比度 ≥4.5:1） */
-  --ts-primary-text: #1b7fae;
-  --ts-accent: #2ec7c9; /* 潮汐青 */
-  --ts-text: #17232d; /* 深海文字 */
-  --ts-text-2: #667783; /* 雾灰文字 */
-  --ts-line: #dce6eb; /* 水线分隔 */
-  --ts-amber: #c98220; /* 临近琥珀（v0.2 临近状态启用） */
-  --ts-coral: #c94f55; /* 到期珊瑚：已过期与危险操作 */
-  --ts-green: #368e76; /* 累积岛绿：正数日辅助色 */
+  --ts-bg: #f5f8fa;
+  --ts-surface: #ffffff;
+  --ts-rail: #edf3f6;
+  --ts-focus: #eaf4f8;
+  --ts-island: #d9edf2;
+  --ts-text: #17232d;
+  --ts-text-2: #546b79;
+  --ts-line: #d9e5eb;
+  --ts-brand: #2a9cdb;
+  --ts-blue: #216f95;
+  --ts-button: #2078a2;
+  --ts-on-button: #ffffff;
+  --ts-teal: #24766c;
+  --ts-amber: #925e1c;
+  --ts-coral: #b74650;
+  --ts-hover: #e4eff4;
+  --ts-air: #e2f0f7;
+  --ts-horizon: #edf6f7;
+  --ts-isle-far: #dcecf0;
+  --ts-isle-near: #cfe4e9;
+  --ts-current: #89b2c1;
+  --ts-shadow: rgba(21, 61, 84, 0.09);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --ts-bg: #101820; /* 夜海背景 */
-    --ts-surface: #17232c; /* 深夜表面 */
-    --ts-primary: #62b9eb; /* 月光蓝 */
-    --ts-primary-text: #62b9eb;
-    --ts-accent: #58d1cb; /* 夜潮青 */
-    --ts-text: #f2f6f8; /* 雾白文字 */
-    --ts-text-2: #a7b5be; /* 夜雾文字 */
-    --ts-line: #2b3a43; /* 暗水线 */
+  :root:not([data-theme='light']) {
+    --ts-bg: #101820;
+    --ts-surface: #17232c;
+    --ts-rail: #121e27;
+    --ts-focus: #1a3542;
+    --ts-island: #234653;
+    --ts-text: #f2f6f8;
+    --ts-text-2: #afbec7;
+    --ts-line: #30424d;
+    --ts-brand: #62b9eb;
+    --ts-blue: #8bcbed;
+    --ts-button: #7bc5e9;
+    --ts-on-button: #12232d;
+    --ts-teal: #80cdb9;
+    --ts-amber: #e9bd78;
+    --ts-coral: #f0939b;
+    --ts-hover: #233844;
+    --ts-air: #203e50;
+    --ts-horizon: #1b333e;
+    --ts-isle-far: #294854;
+    --ts-isle-near: #325563;
+    --ts-current: #6597aa;
+    --ts-shadow: rgba(0, 0, 0, 0.2);
   }
+}
+
+:root[data-theme='dark'] {
+  --ts-bg: #101820;
+  --ts-surface: #17232c;
+  --ts-rail: #121e27;
+  --ts-focus: #1a3542;
+  --ts-island: #234653;
+  --ts-text: #f2f6f8;
+  --ts-text-2: #afbec7;
+  --ts-line: #30424d;
+  --ts-brand: #62b9eb;
+  --ts-blue: #8bcbed;
+  --ts-button: #7bc5e9;
+  --ts-on-button: #12232d;
+  --ts-teal: #80cdb9;
+  --ts-amber: #e9bd78;
+  --ts-coral: #f0939b;
+  --ts-hover: #233844;
+  --ts-air: #203e50;
+  --ts-horizon: #1b333e;
+  --ts-isle-far: #294854;
+  --ts-isle-near: #325563;
+  --ts-current: #6597aa;
+  --ts-shadow: rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='light'] {
+  --ts-bg: #f5f8fa;
+  --ts-surface: #ffffff;
+  --ts-rail: #edf3f6;
+  --ts-focus: #eaf4f8;
+  --ts-island: #d9edf2;
+  --ts-text: #17232d;
+  --ts-text-2: #546b79;
+  --ts-line: #d9e5eb;
+  --ts-brand: #2a9cdb;
+  --ts-blue: #216f95;
+  --ts-button: #2078a2;
+  --ts-on-button: #ffffff;
+  --ts-teal: #24766c;
+  --ts-amber: #925e1c;
+  --ts-coral: #b74650;
+  --ts-hover: #e4eff4;
+  --ts-air: #e2f0f7;
+  --ts-horizon: #edf6f7;
+  --ts-isle-far: #dcecf0;
+  --ts-isle-near: #cfe4e9;
+  --ts-current: #89b2c1;
+  --ts-shadow: rgba(21, 61, 84, 0.09);
+}
+
+/* 兼容别名：历史组件引用的旧变量名映射到定稿 tokens */
+:root {
+  --ts-primary: var(--ts-brand);
+  --ts-primary-text: var(--ts-blue);
 }
 
 /* 全局重置：窗口内页面不留默认边距，避免面板出现多余滚动条 */
@@ -38,7 +118,6 @@ html,
 body {
   margin: 0;
   padding: 0;
-  /* 无边框窗口未设字体时 WebView 回退为衬线体，这里统一为系统字体栈 */
   font-family:
     -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
     sans-serif;

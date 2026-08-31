@@ -15,6 +15,8 @@ pub struct Settings {
     pub launch_at_login: bool,
     // 面板是否显示已过期的倒计时条目
     pub show_expired: bool,
+    // 外观主题（system/light/dark），缺失跟随系统
+    pub theme: Option<String>,
 }
 
 impl Default for Settings {
@@ -22,6 +24,7 @@ impl Default for Settings {
         Self {
             launch_at_login: false,
             show_expired: true,
+            theme: None,
         }
     }
 }
