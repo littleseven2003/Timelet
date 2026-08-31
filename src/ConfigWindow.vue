@@ -458,9 +458,25 @@ onMounted(async () => {
             </button>
           </header>
 
-          <p v-if="loaded && sorted.length === 0" class="entry-list__empty">
-            {{ t('config.emptyList') }}
-          </p>
+          <div v-if="loaded && sorted.length === 0" class="entry-list__empty">
+            <!-- 极简水面与小岛轮廓（设计语言 5.6），与面板空状态一致 -->
+            <svg class="entry-list__empty-art" viewBox="0 0 120 44" fill="none" aria-hidden="true">
+              <path
+                d="M40 32 Q60 10 80 32"
+                stroke="var(--ts-primary)"
+                stroke-width="2"
+                stroke-linecap="round"
+                opacity="0.55"
+              />
+              <path
+                d="M6 33 Q34 29 60 33 T114 33"
+                stroke="var(--ts-line)"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+            <p>{{ t('config.emptyList') }}</p>
+          </div>
 
           <ul class="entry-list">
             <li
@@ -761,6 +777,19 @@ onMounted(async () => {
   opacity: 0.55;
   font-size: 13px;
   padding: 40px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.entry-list__empty p {
+  margin: 0;
+}
+
+.entry-list__empty-art {
+  width: 120px;
+  height: 44px;
 }
 
 .btn {
