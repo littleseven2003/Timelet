@@ -5,6 +5,14 @@ export default {
     tagline: 'Keep important days at hand',
   },
   panel: {
+    brand: 'Timelet',
+    viewAll: 'View all entries',
+    sections: {
+      now: 'Now · Today',
+      soon: 'Soon · Countdowns',
+      elapsed: 'Elapsed · Counting',
+      past: 'Overdue',
+    },
     emptyTitle: 'No important dates yet.',
     emptyHint: 'Open the settings window to add your first entry',
     addEntry: 'Add Entry',
@@ -56,6 +64,11 @@ export default {
     createFirst: 'Create first entry',
     editEntry: 'Edit Entry',
     emptyList: 'No important dates yet.',
+    groups: {
+      now: 'Today',
+      week: 'Next 7 days',
+      later: 'Later',
+    },
     sectionBasic: 'Basic',
     sectionTime: 'Time',
     sectionAppearance: 'Appearance',

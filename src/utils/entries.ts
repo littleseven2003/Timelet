@@ -160,6 +160,88 @@ function timedText(entry: Entry, nowMs: number, t: Translate): string {
   return expired ? t('panel.expiredOnly') : t('panel.soon');
 }
 
+
+// 条目分区：此时（今天内到期）/ 将至（未来）/ 历时（正数日）/ 已过期（倒数日过期）
+export type EntrySection = 'now' | 'soon' | 'elapsed' | 'past';
+
+// 今天零点与明日零点（毫秒），供分区与分组判定
+function dayBounds(nowMs: number) {
+  const start = new Date(nowMs);
+  const today0 = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+  return { today0, tomorrow0: today0 + 86_400_000 };
+}
+
+export function sectionOf(entry: Entry, nowMs: number = Date.now()): EntrySection {
+  if (entry.entryType === 'elapsed') return 'elapsed';
+  const { today0, tomorrow0 } = dayBounds(nowMs);
+
+  if (entry.repeat) {
+    // 循环条目永不过期，按下一次发生是否在今天内判定
+    const next = effectiveDeadline(entry, nowMs).getTime();
+    return next < tomorrow0 ? 'now' : 'soon';
+  }
+
+  const dl = entryDeadline(entry).getTime();
+  if (entry.time) {
+    // 带时刻条目以当前时刻判定是否已过期
+    return dl >= nowMs ? (dl < tomorrow0 ? 'now' : 'soon') : 'past';
+  }
+  // 纯日期条目按自然日判定
+  return dl >= today0 ? (dl < tomorrow0 ? 'now' : 'soon') : 'past';
+}
+
+// 分区内排序：置顶优先 → 手动顺序（若存在）→ 截止时间
+function compareWithin(a: Entry, b: Entry): number {
+  if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+  const ma = a.sortIndex ?? Number.MAX_SAFE_INTEGER;
+  const mb = b.sortIndex ?? Number.MAX_SAFE_INTEGER;
+  if (ma !== mb) return ma - mb;
+  return entryDeadline(a).getTime() - entryDeadline(b).getTime();
+}
+
+// 面板分组：此时 → 将至 → 历时 → 已过期（已过滤条目不传入）
+export function groupedEntries(
+  entries: Entry[],
+  nowMs: number = Date.now(),
+): { key: EntrySection; items: Entry[] }[] {
+  const buckets: Record<EntrySection, Entry[]> = { now: [], soon: [], elapsed: [], past: [] };
+  for (const entry of entries) buckets[sectionOf(entry, nowMs)].push(entry);
+  const order: EntrySection[] = ['now', 'soon', 'elapsed', 'past'];
+  return order
+    .map((key) => ({ key, items: buckets[key].sort(compareWithin) }))
+    .filter((group) => group.items.length > 0);
+}
+
+// 主窗口分组（设计文档 5.2）：今天 / 接下来 7 天 / 更晚（含正数日与已过期）
+export type ConfigGroup = 'now' | 'week' | 'later';
+
+export function groupForConfig(
+  entries: Entry[],
+  nowMs: number = Date.now(),
+): { key: ConfigGroup; items: Entry[] }[] {
+  const { tomorrow0 } = dayBounds(nowMs);
+  const weekEnd = tomorrow0 + 6 * 86_400_000;
+  const buckets: Record<ConfigGroup, Entry[]> = { now: [], week: [], later: [] };
+
+  for (const entry of entries) {
+    const section = sectionOf(entry, nowMs);
+    if (section === 'now') {
+      buckets.now.push(entry);
+    } else if (section === 'soon') {
+      (effectiveDeadline(entry, nowMs).getTime() < weekEnd ? buckets.week : buckets.later).push(
+        entry,
+      );
+    } else {
+      buckets.later.push(entry);
+    }
+  }
+
+  const order: ConfigGroup[] = ['now', 'week', 'later'];
+  return order
+    .map((key) => ({ key, items: buckets[key].sort(compareWithin) }))
+    .filter((group) => group.items.length > 0);
+}
+
 // 分组序：0 置顶、1 未到期倒计时、2 正计时、3 已过期倒计时；带时刻条目以当前时刻判定
 function groupOf(entry: Entry, nowMs: number): number {
   if (entry.pinned) return 0;
