@@ -1,6 +1,6 @@
+use crate::persistence::{DataFile, Document};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -9,7 +9,7 @@ const SETTINGS_FILE: &str = "settings.json";
 const WINDOW_STATE_FILE: &str = "window-state.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct Settings {
     // 开机自启（开关状态与系统自启项同步，由前端调用自启插件维护）
     pub launch_at_login: bool,
@@ -17,6 +17,7 @@ pub struct Settings {
     pub show_expired: bool,
     // 外观主题（system/light/dark），缺失跟随系统
     pub theme: Option<String>,
+    pub panel_limit: usize,
 }
 
 impl Default for Settings {
@@ -25,50 +26,52 @@ impl Default for Settings {
             launch_at_login: false,
             show_expired: true,
             theme: None,
+            panel_limit: 6,
         }
     }
 }
 
-// 全局设置状态：启动时加载，变更后立即落盘
-pub struct SettingsStore(Mutex<Settings>);
+impl Document for Settings {
+    fn validate(&self) -> Result<(), String> {
+        if !matches!(
+            self.theme.as_deref(),
+            None | Some("system" | "light" | "dark")
+        ) || !(5..=8).contains(&self.panel_limit)
+        {
+            return Err("不支持的外观或面板条数设置，请使用兼容版本打开".into());
+        }
+        Ok(())
+    }
+}
+
+pub struct SettingsStore(DataFile<Settings>);
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
-    let settings = fs::read_to_string(path(app))
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default();
-    app.manage(SettingsStore(Mutex::new(settings)));
+    app.manage(SettingsStore(DataFile::new(path(app)?)));
     Ok(())
 }
 
-fn path(app: &AppHandle) -> PathBuf {
-    app.path()
-        .app_data_dir()
-        .expect("无法定位应用数据目录")
-        .join(SETTINGS_FILE)
+fn path(app: &AppHandle) -> tauri::Result<PathBuf> {
+    Ok(app.path().app_data_dir()?.join(SETTINGS_FILE))
 }
 
 #[tauri::command]
-pub fn settings_get(state: State<'_, SettingsStore>) -> Settings {
-    state.0.lock().unwrap().clone()
+pub fn settings_get(state: State<'_, SettingsStore>) -> Result<Settings, String> {
+    state.0.read()
 }
 
-// 整体保存并原子落盘
 #[tauri::command]
 pub fn settings_set(
     app: AppHandle,
     state: State<'_, SettingsStore>,
     settings: Settings,
 ) -> Result<(), String> {
-    let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    let file = path(&app);
-    let tmp = file.with_extension("json.tmp");
-    fs::write(&tmp, text).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, &file).map_err(|e| e.to_string())?;
-    *state.0.lock().unwrap() = settings.clone();
-    // 广播设置变更，让常驻面板与主窗口同步（如过期显示开关）
-    app.emit("settings-changed", settings)
-        .map_err(|e| e.to_string())?;
+    state.0.change(|current| {
+        *current = settings.clone();
+        Ok(())
+    })?;
+    // 数据已经保存，广播失败不能被误报为写入失败。
+    let _ = app.emit("settings-changed", settings);
     Ok(())
 }
 

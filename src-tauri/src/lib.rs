@@ -1,3 +1,4 @@
+mod persistence;
 mod settings;
 mod storage;
 mod tray;
