@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Entry } from '../types/entry';
-import { effectiveTime, entryProgress, formatEntryText } from '../utils/entries';
+import { effectiveDateIso, effectiveTime, entryProgress, formatEntryText } from '../utils/entries';
 const props = defineProps<{ entry: Entry; now: number; compact?: boolean }>();
 defineEmits<{ edit: [entry: Entry] }>();
 const { t } = useI18n();
@@ -27,7 +27,9 @@ const text = computed(() => formatEntryText(props.entry, props.now, t));
       <span class="feature__eyebrow">{{ t('config.featuredLabel') }}</span>
       <strong class="feature__name">{{ entry.name }}</strong>
       <span class="feature__date"
-        >{{ entry.date
+        ><template v-if="entry.repeat && entry.entryType === 'countdown'"
+          >{{ t(`config.repeat.${entry.repeat}`) }} · {{ t('config.nextOccurrence') }} </template
+        >{{ effectiveDateIso(entry, now)
         }}<template v-if="entry.time"> · {{ effectiveTime(entry, now) }}</template></span
       >
       <span v-if="!compact" class="feature__meaning">{{ text }}</span>

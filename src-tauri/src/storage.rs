@@ -65,8 +65,17 @@ impl Document for Store {
             if !valid_date(&entry.date)
                 || !matches!(entry.entry_type.as_str(), "countdown" | "elapsed")
                 || entry.time.as_deref().is_some_and(|time| !valid_time(time))
+                || entry
+                    .repeat
+                    .as_deref()
+                    .is_some_and(|repeat| !matches!(repeat, "daily" | "workday"))
+                || (entry.repeat.is_some()
+                    && (entry.entry_type != "countdown" || entry.time.is_none()))
             {
-                return Err(format!("条目「{}」的日期、时刻或类型无法识别", entry.name));
+                return Err(format!(
+                    "条目「{}」的日期、时刻、类型或发生频率无法识别",
+                    entry.name
+                ));
             }
         }
         Ok(())
@@ -242,6 +251,25 @@ mod tests {
         assert!(!valid_date("broken"));
         assert!(valid_time("23:59"));
         assert!(!valid_time("24:00"));
+    }
+
+    #[test]
+    fn repeat_requires_a_timed_countdown_and_known_rule() {
+        let json = r##"{"schema_version":2,"entries":[{"id":"a","name":"下班","entryType":"countdown","date":"2026-09-01","time":"17:00","repeat":"daily","pinned":false,"createdAt":"old","updatedAt":"new"}]}"##;
+        let store: Store = serde_json::from_str(json).unwrap();
+        assert!(store.validate().is_ok());
+
+        let without_time: Store =
+            serde_json::from_str(&json.replace(",\"time\":\"17:00\"", "")).unwrap();
+        assert!(without_time.validate().is_err());
+
+        let elapsed: Store =
+            serde_json::from_str(&json.replace("\"countdown\"", "\"elapsed\"")).unwrap();
+        assert!(elapsed.validate().is_err());
+
+        let unknown: Store =
+            serde_json::from_str(&json.replace("\"daily\"", "\"weekly\"")).unwrap();
+        assert!(unknown.validate().is_err());
     }
 
     #[test]

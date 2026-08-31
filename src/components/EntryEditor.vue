@@ -34,6 +34,10 @@ const units = computed(() =>
 const repeats = computed(() =>
   ['none', 'daily', 'workday'].map((value) => ({ value, label: t(`config.repeat.${value}`) })),
 );
+const dateLabel = computed(() => {
+  if (draft.value.entryType === 'elapsed') return t('config.startDate');
+  return t(draft.value.time && draft.value.repeat ? 'config.firstDate' : 'config.targetDate');
+});
 const canSave = computed(() => !!draft.value.name.trim() && isValidDate(draft.value.date));
 
 function changeType(type: string) {
@@ -110,9 +114,7 @@ defineExpose({ submit: () => form.value?.requestSubmit() });
         />
       </div>
       <div class="field">
-        <span id="date-label">{{
-          t(draft.entryType === 'countdown' ? 'config.targetDate' : 'config.startDate')
-        }}</span>
+        <span id="date-label">{{ dateLabel }}</span>
         <button
           ref="dateButton"
           type="button"
@@ -142,6 +144,17 @@ defineExpose({ submit: () => form.value?.requestSubmit() });
           ><ToggleSwitch :model-value="!!draft.time" @update:model-value="toggleTime"
         /></label>
       </div>
+      <div v-if="draft.time && draft.entryType === 'countdown'" class="field frequency-field">
+        <span id="repeat-label">{{ t('config.fieldRepeat') }}</span
+        ><SegmentedControl
+          :model-value="draft.repeat ?? 'none'"
+          :options="repeats"
+          aria-labelledby="repeat-label"
+          @update:model-value="
+            draft.repeat = $event === 'none' ? undefined : ($event as Entry['repeat'])
+          "
+        /><small>{{ t('config.repeatHint') }}</small>
+      </div>
       <div class="semantic-preview" aria-live="polite">
         <EntryTypeSymbol :type="draft.entryType" />
         <div>
@@ -149,7 +162,10 @@ defineExpose({ submit: () => form.value?.requestSubmit() });
           ><span
             >{{ preview || t('config.previewDays')
             }}<template v-if="isValidDate(draft.date)">
-              · {{ effectiveDateIso(draft, now)
+              <template v-if="draft.repeat && draft.entryType === 'countdown'">
+                · {{ t(`config.repeat.${draft.repeat}`) }} ·
+                {{ t('config.nextOccurrence') }} </template
+              ><template v-else> · </template> {{ effectiveDateIso(draft, now)
               }}<template v-if="draft.time"> {{ effectiveTime(draft, now) }}</template></template
             ></span
           >
@@ -157,17 +173,6 @@ defineExpose({ submit: () => form.value?.requestSubmit() });
       </div>
       <details class="more">
         <summary>{{ t('config.showMore') }}</summary>
-        <div v-if="draft.time && draft.entryType === 'countdown'" class="field">
-          <span id="repeat-label">{{ t('config.fieldRepeat') }}</span
-          ><SegmentedControl
-            :model-value="draft.repeat ?? 'none'"
-            :options="repeats"
-            aria-labelledby="repeat-label"
-            @update:model-value="
-              draft.repeat = $event === 'none' ? undefined : ($event as Entry['repeat'])
-            "
-          /><small>{{ t('config.repeatHint') }}</small>
-        </div>
         <div v-if="!draft.time" class="field">
           <span id="unit-label">{{ t('config.fieldUnit') }}</span
           ><SegmentedControl
@@ -303,6 +308,7 @@ summary {
 .more .field {
   margin-top: 16px;
 }
+.frequency-field small,
 .more small {
   color: var(--ts-text-2);
   line-height: 1.6;

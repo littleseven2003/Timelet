@@ -49,14 +49,11 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
           }}<span v-if="entry.pinned" class="pin" :aria-label="t('config.pinnedTag')">·</span></span
         >
         <span class="entry-row__meta"
-          >{{
-            t(entry.entryType === 'countdown' ? 'config.typeCountdown' : 'config.typeElapsed')
-          }}
-          · {{ effectiveDateIso(entry, now)
-          }}<template v-if="entry.time"> {{ effectiveTime(entry, now) }}</template
-          ><template v-if="entry.repeat && entry.entryType === 'countdown'">
-            · {{ t(`config.repeat.${entry.repeat}`) }}</template
-          ></span
+          >{{ t(entry.entryType === 'countdown' ? 'config.typeCountdown' : 'config.typeElapsed') }}
+          <template v-if="entry.repeat && entry.entryType === 'countdown'">
+            · {{ t(`config.repeat.${entry.repeat}`) }} · {{ t('config.nextOccurrence') }} </template
+          ><template v-else> · </template> {{ effectiveDateIso(entry, now)
+          }}<template v-if="entry.time"> {{ effectiveTime(entry, now) }}</template></span
         >
       </span>
       <span class="entry-row__value" :class="{ expired, elapsed: entry.entryType === 'elapsed' }">{{

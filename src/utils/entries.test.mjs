@@ -76,6 +76,45 @@ test('未来循环保留锚点，周末顺延，确切日期与相对值一致',
   assert.equal(u.effectiveDateIso(exact, now + 1), '2026-09-01');
 });
 
+test('每日 17:00 在到达后推进到次日，单次条目保持过期', () => {
+  process.env.TZ = 'Asia/Shanghai';
+  const daily = entry({ date: '2026-09-01', time: '17:00', repeat: 'daily' });
+  const before = new Date('2026-09-01T09:30:00').getTime();
+  assert.equal(u.effectiveDateIso(daily, before), '2026-09-01');
+  assert.deepEqual(u.formatEntryText(daily, before, translate), {
+    key: 'panel.left.hoursMinutes',
+    h: 7,
+    m: 30,
+  });
+
+  const exact = new Date('2026-09-01T17:00:00').getTime();
+  assert.equal(u.effectiveDeadline(daily, exact).getTime(), exact);
+  assert.equal(u.formatEntryText(daily, exact, translate).key, 'panel.soon');
+
+  const after = exact + 1000;
+  assert.equal(u.effectiveDateIso(daily, after), '2026-09-02');
+  assert.deepEqual(u.formatEntryText(daily, after, translate), {
+    key: 'panel.left.hoursMinutes',
+    h: 23,
+    m: 59,
+  });
+
+  const once = entry({ date: '2026-09-01', time: '17:00' });
+  assert.equal(u.effectiveDateIso(once, after), '2026-09-01');
+  assert.equal(u.isExpiredCountdown(once, after), true);
+  assert.equal(u.formatEntryText(once, after, translate).key, 'panel.expiredOnly');
+});
+
+test('周一至周五在周五到达后推进到下周一', () => {
+  process.env.TZ = 'Asia/Shanghai';
+  const workday = entry({ date: '2026-09-01', time: '17:00', repeat: 'workday' });
+  const fridayAfter = new Date('2026-09-04T17:00:01').getTime();
+  const next = u.effectiveDeadline(workday, fridayAfter);
+  assert.equal(u.effectiveDateIso(workday, fridayAfter), '2026-09-07');
+  assert.equal(next.getDay(), 1);
+  assert.equal(u.sectionOf(workday, fridayAfter), 'soon');
+});
+
 test('面板按条目限额，排除归档与近屿重复，无进度区间不隐藏条目', () => {
   const now = new Date('2026-08-31T12:00:00').getTime();
   const items = Array.from({ length: 50 }, (_, i) =>
