@@ -6,11 +6,17 @@ import { listen } from '@tauri-apps/api/event';
 import type { DisplayUnit, Entry } from './types/entry';
 import { ENTRY_COLORS } from './types/entry';
 import { createDraft, useEntries } from './composables/useEntries';
-import { entryDisplayValue, formatEntryText, sortEntries } from './utils/entries';
+import {
+  entryDisplayValue,
+  formatEntryText,
+  groupForConfig,
+  sortEntries,
+} from './utils/entries';
 import DateTimePicker from './components/DateTimePicker.vue';
 import SegmentedControl from './components/SegmentedControl.vue';
 import ToggleSwitch from './components/ToggleSwitch.vue';
 import SettingsSection from './components/SettingsSection.vue';
+import EntryTypeSymbol from './components/EntryTypeSymbol.vue';
 
 type NavKey = 'entries' | 'settings' | 'about';
 
@@ -43,6 +49,10 @@ async function togglePinned(entry: Entry) {
 
 const sorted = computed(() => sortEntries(entries.value));
 const canSave = computed(() => !!editing.value?.name && !!editing.value?.date);
+
+// 主窗口分组（设计文档 5.2）：今天 / 接下来 7 天 / 更晚；拖拽预览期间退回平铺
+const groups = computed(() => groupForConfig(entries.value));
+const flatGroups = computed(() => groups.value.flatMap((group) => group.items));
 
 // 预览卡文案：随名称/类型/日期输入实时变化
 const previewText = computed(() => {
@@ -122,7 +132,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 // 拖拽排序：拖动过程用本地预览列表渲染，落点后一次性持久化
 const dragId = ref<string | null>(null);
 const previewList = ref<Entry[] | null>(null);
-const displayList = computed(() => previewList.value ?? sorted.value);
+const displayList = computed(() => previewList.value ?? flatGroups.value);
 
 function onDragStart(id: string) {
   dragId.value = id;
@@ -478,7 +488,8 @@ onMounted(async () => {
             <p>{{ t('config.emptyList') }}</p>
           </div>
 
-          <ul class="entry-list">
+          <ul v-if="dragId" class="entry-list">
+            <!-- 拖拽中：平铺预览，保证跨组移动的视觉连续 -->
             <li
               v-for="entry in displayList"
               :key="entry.id"
@@ -493,6 +504,7 @@ onMounted(async () => {
               @contextmenu.prevent="openCtxMenu($event, entry)"
             >
               <span class="entry-item__color" :style="{ backgroundColor: entry.color }" />
+              <EntryTypeSymbol :type="entry.entryType" class="entry-item__symbol" />
               <div class="entry-item__info">
                 <span class="entry-item__name">
                   {{ entry.name }}
@@ -526,6 +538,56 @@ onMounted(async () => {
               </div>
             </li>
           </ul>
+
+          <template v-else>
+            <section v-for="group in groups" :key="group.key" class="entry-group">
+              <h3 class="entry-group__title">{{ t(`config.groups.${group.key}`) }}</h3>
+              <ul class="entry-list">
+                <li
+                  v-for="entry in group.items"
+                  :key="entry.id"
+                  class="entry-item"
+                  draggable="true"
+                  @dragstart="onDragStart(entry.id)"
+                  @contextmenu.prevent="openCtxMenu($event, entry)"
+                >
+                  <span class="entry-item__color" :style="{ backgroundColor: entry.color }" />
+                  <EntryTypeSymbol :type="entry.entryType" class="entry-item__symbol" />
+                  <div class="entry-item__info">
+                    <span class="entry-item__name">
+                      {{ entry.name }}
+                      <span v-if="entry.pinned" class="entry-item__pin">{{
+                        t('config.pinnedTag')
+                      }}</span>
+                    </span>
+                    <span class="entry-item__meta">
+                      {{
+                        entry.entryType === 'countdown'
+                          ? t('config.typeCountdown')
+                          : t('config.typeElapsed')
+                      }}
+                      · {{ entry.date }}
+                    </span>
+                  </div>
+                  <span class="entry-item__days" :style="{ color: entry.color }">
+                    {{ formatEntryText(entry, Date.now(), (key, params) => t(key, params ?? {})) }}
+                  </span>
+                  <div class="entry-item__actions" @mousedown.stop>
+                    <button class="btn btn--small" type="button" @click="openEdit(entry)">
+                      {{ t('config.edit') }}
+                    </button>
+                    <button
+                      class="btn btn--small btn--danger"
+                      type="button"
+                      @click="deleteTarget = entry"
+                    >
+                      {{ t('config.delete') }}
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </section>
+          </template>
         </template>
       </template>
 
@@ -726,6 +788,11 @@ onMounted(async () => {
   opacity: 0.5;
 }
 
+.entry-item__symbol {
+  flex-shrink: 0;
+  opacity: 0.65;
+}
+
 .entry-item__color {
   width: 10px;
   height: 32px;
@@ -770,6 +837,17 @@ onMounted(async () => {
 .entry-item:hover .entry-item__actions,
 .entry-item:focus-within .entry-item__actions {
   opacity: 1;
+}
+
+.entry-group + .entry-group {
+  margin-top: 16px;
+}
+
+.entry-group__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ts-text-2);
+  margin: 0 0 8px;
 }
 
 .entry-list__empty {
