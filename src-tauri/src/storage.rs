@@ -30,6 +30,8 @@ pub struct Entry {
     pub pinned: bool,
     // 手动排序值（拖拽后生成），缺失表示按自动规则排序
     pub sort_index: Option<i64>,
+    // 归档后离开活动视图，可恢复；缺失表示活动条目
+    pub archived: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
 }

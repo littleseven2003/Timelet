@@ -23,6 +23,8 @@ export interface Entry {
   note?: string;
   /** 手动排序值（拖拽后生成），缺失表示按自动规则排序 */
   sortIndex?: number;
+  /** 归档后离开活动视图，可恢复；缺失表示活动条目 */
+  archived?: boolean;
   color: string;
   pinned: boolean;
   createdAt: string;
