@@ -20,6 +20,7 @@ const text = computed(() => formatEntryText(props.entry, props.now, t));
     :class="{ compact }"
     type="button"
     :data-entry-id="entry.id"
+    :title="compact ? entry.name : undefined"
     @click="$emit('edit', entry)"
   >
     <div class="feature__copy">
@@ -171,20 +172,28 @@ const text = computed(() => formatEntryText(props.entry, props.now, t));
   padding: 14px 16px 20px;
   gap: 12px;
   border-radius: 10px 10px 20px 10px;
-  flex-wrap: wrap;
 }
 .compact .feature__copy {
   gap: 5px;
   flex: 1;
+  overflow: hidden;
 }
 .compact .feature__name {
   font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .compact .feature__date {
   font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .feature__value {
   position: relative;
+  flex: none;
+  white-space: nowrap;
   color: var(--ts-blue);
   font-size: 17px;
   font-weight: 500;

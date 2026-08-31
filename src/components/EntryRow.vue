@@ -38,6 +38,7 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
       :data-entry-id="entry.id"
       :aria-expanded="!!expanded"
       :aria-controls="`detail-${entry.id}`"
+      :title="compact ? entry.name : undefined"
       @click="$emit('expand')"
       @contextmenu.prevent="$emit('expand')"
     >
@@ -194,16 +195,24 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 .compact .entry-row__summary {
   padding: 13px 3px;
   gap: 9px;
-  flex-wrap: wrap;
 }
 .compact .entry-row__title {
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .compact .entry-row__value {
   font-size: 16px;
+  flex: none;
+  max-width: none;
+  white-space: nowrap;
 }
 .compact .entry-row__meta {
   font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 @media (max-width: 420px) {
   .entry-row__value {
