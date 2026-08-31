@@ -117,7 +117,18 @@ onUnmounted(() => clearInterval(ticker));
   <aside class="panel" @contextmenu.prevent="showContextMenu(null)">
     <header class="panel__header">
       <span class="panel__brand">{{ t('panel.brand') }}</span>
-      <span class="panel__date">{{ today.date }} · {{ today.weekday }}</span>
+      <span class="panel__header-right">
+        <span class="panel__date">{{ today.date }} · {{ today.weekday }}</span>
+        <button
+          class="panel__quick-add"
+          type="button"
+          :aria-label="t('panel.addEntry')"
+          :title="t('panel.addEntry')"
+          @click="openCreate"
+        >
+          ＋
+        </button>
+      </span>
     </header>
 
     <div v-if="loaded && groups.length === 0" class="panel__empty">
@@ -220,9 +231,32 @@ onUnmounted(() => clearInterval(ticker));
   color: var(--ts-primary-text);
 }
 
+.panel__header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .panel__date {
   font-size: 12px;
   opacity: 0.6;
+}
+
+.panel__quick-add {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(42, 156, 219, 0.12);
+  color: var(--ts-primary-text);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.panel__quick-add:hover {
+  background-color: rgba(42, 156, 219, 0.22);
 }
 
 .panel__scroll {
