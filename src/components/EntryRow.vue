@@ -17,11 +17,13 @@ const props = defineProps<{
   expanded?: boolean;
   compact?: boolean;
   disabled?: boolean;
+  nearIsle?: boolean;
 }>();
 defineEmits<{
   expand: [];
   edit: [];
   pin: [];
+  nearIsle: [];
   archive: [];
   restore: [];
   duplicate: [];
@@ -51,7 +53,8 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
       <span class="entry-row__body">
         <span class="entry-row__title"
           >{{ entry.name
-          }}<span v-if="entry.pinned" class="pin" :aria-label="t('config.pinnedTag')">·</span></span
+          }}<span v-if="entry.pinned" class="pin" :aria-label="t('config.pinnedTag')">·</span
+          ><span v-if="nearIsle" class="near-isle-tag">{{ t('config.nearIsleTag') }}</span></span
         >
         <span class="entry-row__meta">
           <template v-if="compact">{{ compactMeta }}</template>
@@ -80,6 +83,9 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
           </button>
           <button type="button" :disabled="disabled" @click="$emit('pin')">
             {{ t(entry.pinned ? 'config.unpin' : 'config.pinIt') }}
+          </button>
+          <button type="button" :disabled="disabled" @click="$emit('nearIsle')">
+            {{ t(nearIsle ? 'config.removeNearIsle' : 'config.setNearIsle') }}
           </button>
         </template>
         <button v-else type="button" :disabled="disabled" @click="$emit('restore')">
@@ -150,6 +156,12 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
   color: var(--ts-blue);
   margin-left: 6px;
   font-size: 17px;
+}
+.near-isle-tag {
+  margin-left: 7px;
+  color: var(--ts-blue);
+  font-size: 10px;
+  font-weight: 500;
 }
 .entry-row__meta {
   font-size: 10px;

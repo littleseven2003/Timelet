@@ -280,46 +280,55 @@ export function sortEntries(entries: Entry[], nowMs = Date.now()): Entry[] {
   });
 }
 
-// 只有有效、非循环、未过期的置顶倒数日可以承载真实进度。
+function repeatCycleStart(entry: Entry, end: Date, created: Date): Date {
+  const anchor = entryDeadline(entry);
+  if (end.getTime() <= anchor.getTime()) return created;
+  let previous = addDays(end, -1);
+  while (entry.repeat === 'workday' && (previous.getDay() === 0 || previous.getDay() === 6)) {
+    previous = addDays(previous, -1);
+  }
+  if (previous.getTime() < anchor.getTime()) return created;
+  return previous.getTime() < created.getTime() ? created : previous;
+}
+
+// 有终点的倒数日使用真实区间；循环条目使用上一发生点到下一发生点的当前周期。
 export function entryProgress(
   entry: Entry,
   nowMs: number,
-): { progress: number; days: number; start: string } | null {
-  if (
-    entry.archived ||
-    entry.entryType !== 'countdown' ||
-    entry.repeat ||
-    isExpiredCountdown(entry, nowMs)
-  )
+): { progress: number; days: number; start: string; end: string } | null {
+  if (entry.archived || entry.entryType !== 'countdown' || isExpiredCountdown(entry, nowMs))
     return null;
-  const start = new Date(entry.createdAt);
-  if (!Number.isFinite(start.getTime()) || !isValidDate(entry.date)) return null;
-  const span = entry.time
-    ? entryDeadline(entry).getTime() - start.getTime()
-    : daysBetween(start, entry.date);
+  const created = new Date(entry.createdAt);
+  if (!Number.isFinite(created.getTime()) || !isValidDate(entry.date)) return null;
+  const end = entry.repeat ? effectiveDeadline(entry, nowMs) : entryDeadline(entry);
+  const start = entry.repeat ? repeatCycleStart(entry, end, created) : created;
+  const span = entry.time ? end.getTime() - start.getTime() : daysBetween(start, entry.date);
   const passed = entry.time ? nowMs - start.getTime() : ordinal(new Date(nowMs)) - ordinal(start);
   if (!Number.isFinite(span) || span <= 0) return null;
   return {
     progress: Math.max(0, Math.min(1, passed / span)),
-    days: daysBetween(new Date(nowMs), entry.date),
+    days: daysBetween(new Date(nowMs), dateIso(end)),
     start: dateIso(start),
+    end: dateIso(end),
   };
 }
 
-export function featuredEntry(entries: Entry[], nowMs: number): Entry | null {
-  return (
-    sortEntries(
-      entries.filter((entry) => entry.pinned && entryProgress(entry, nowMs)),
-      nowMs,
-    )[0] ?? null
-  );
+export function featuredEntry(entries: Entry[], nearIsleEntryId?: string | null): Entry | null {
+  return entries.find((entry) => entry.id === nearIsleEntryId && entry.archived !== true) ?? null;
 }
 
-export function panelSelection(entries: Entry[], nowMs: number, showExpired: boolean, limit = 6) {
-  const visible = entries.filter(
-    (entry) => !entry.archived && (showExpired || !isExpiredCountdown(entry, nowMs)),
+export function panelSelection(
+  entries: Entry[],
+  nearIsleEntryId: string | null,
+  nowMs: number,
+  showExpired: boolean,
+  limit = 6,
+) {
+  const active = entries.filter((entry) => !entry.archived);
+  const featured = featuredEntry(active, nearIsleEntryId);
+  const visible = active.filter(
+    (entry) => entry.id === featured?.id || showExpired || !isExpiredCountdown(entry, nowMs),
   );
-  const featured = featuredEntry(visible, nowMs);
   const rest = visible.filter((entry) => entry.id !== featured?.id);
   const cap = Math.max(5, Math.min(8, Number.isFinite(limit) ? Math.trunc(limit) : 6));
   const selected = groupedEntries(rest, nowMs)

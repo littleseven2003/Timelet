@@ -23,6 +23,7 @@ import appIcon from './assets/app-icon.png';
 const { t, locale } = useI18n();
 const {
   entries,
+  nearIsleEntryId,
   loaded,
   loading,
   error,
@@ -34,6 +35,7 @@ const {
   restore,
   duplicate,
   reorder,
+  setNearIsle,
 } = useEntries();
 const { error: settingsError, retry: retrySettings } = useSettings();
 const now = useClock();
@@ -45,11 +47,16 @@ const actionError = ref('');
 const message = ref('');
 const undo = ref<(() => Promise<void>) | null>(null);
 const editing = ref<Entry | null>(null);
+const editingNearIsle = ref(false);
 const snapshot = ref('');
+const nearIsleSnapshot = ref(false);
 const isNew = ref(false);
 const editor = ref<InstanceType<typeof EntryEditor>>();
 const dirty = computed(
-  () => editing.value !== null && JSON.stringify(editing.value) !== snapshot.value,
+  () =>
+    editing.value !== null &&
+    (JSON.stringify(editing.value) !== snapshot.value ||
+      editingNearIsle.value !== nearIsleSnapshot.value),
 );
 const orderDraft = ref<Entry[] | null>(null);
 const dragId = ref<string | null>(null);
@@ -61,6 +68,14 @@ const pendingDialog = ref<{
   run: () => Promise<void> | void;
 } | null>(null);
 const active = computed(() => entries.value.filter((entry) => !entry.archived));
+const nearIsleEntry = computed(
+  () => active.value.find((entry) => entry.id === nearIsleEntryId.value) ?? null,
+);
+const nearIsleReplacement = computed(() =>
+  nearIsleEntry.value && nearIsleEntry.value.id !== editing.value?.id
+    ? nearIsleEntry.value.name
+    : undefined,
+);
 const counts = computed(() => ({
   now: active.value.length,
   countdown: active.value.filter((e) => e.entryType === 'countdown').length,
@@ -89,7 +104,7 @@ const canOrder = computed(
 );
 const featured = computed(() =>
   nav.value === 'now' && !search.value.trim() && !orderDraft.value
-    ? featuredEntry(active.value, now.value)
+    ? featuredEntry(active.value, nearIsleEntryId.value)
     : null,
 );
 const groups = computed(() => {
@@ -160,6 +175,8 @@ function beginEdit(entry?: Entry) {
       editing.value.entryType = 'elapsed';
     }
     snapshot.value = JSON.stringify(editing.value);
+    editingNearIsle.value = !!entry && nearIsleEntryId.value === entry.id;
+    nearIsleSnapshot.value = editingNearIsle.value;
     actionError.value = '';
   });
 }
@@ -174,7 +191,10 @@ function cancelEdit() {
 async function save(entry: Entry) {
   const original = JSON.parse(snapshot.value) as Entry;
   if (
-    await run(() => upsert(entry, isNew.value ? undefined : original.updatedAt), t('common.saved'))
+    await run(
+      () => upsert(entry, isNew.value ? undefined : original.updatedAt, editingNearIsle.value),
+      t('common.saved'),
+    )
   ) {
     editing.value = null;
     undo.value = null;
@@ -187,6 +207,18 @@ async function togglePin(entry: Entry) {
     () => upsert({ ...entry, pinned: !entry.pinned, updatedAt: new Date().toISOString() }),
     t('common.saved'),
   );
+  focusEntry(entry.id);
+}
+async function toggleNearIsle(entry: Entry) {
+  const removing = nearIsleEntryId.value === entry.id;
+  if (
+    await run(
+      () => setNearIsle(removing ? undefined : entry.id),
+      t(removing ? 'config.nearIsleRemoved' : 'config.nearIsleSet', { name: entry.name }),
+    )
+  ) {
+    expanded.value = null;
+  }
   focusEntry(entry.id);
 }
 async function setArchived(entry: Entry, archived: boolean) {
@@ -202,6 +234,7 @@ async function setArchived(entry: Entry, archived: boolean) {
   }
 }
 function askRemove(entry: Entry) {
+  const wasNearIsle = nearIsleEntryId.value === entry.id;
   pendingDialog.value = {
     title: t('config.deleteConfirmTitle'),
     text: t('config.deleteConfirmText', { name: entry.name }),
@@ -212,7 +245,7 @@ function askRemove(entry: Entry) {
       message.value = t('config.deleted');
       undo.value = async () => {
         if (entries.value.some((e) => e.id === entry.id)) throw new Error(t('config.undoConflict'));
-        await upsert(entry);
+        await upsert(entry, undefined, wasNearIsle);
       };
       expanded.value = null;
       focusEntry();
@@ -445,11 +478,13 @@ onBeforeUnmount(() => {
         v-if="editing"
         ref="editor"
         v-model="editing"
+        v-model:near-isle="editingNearIsle"
         :is-new="isNew"
         :now="now"
         :busy="busy"
         :blocked="!!error || !loaded"
         :error="actionError"
+        :near-isle-replacement="nearIsleReplacement"
         @save="save"
         @cancel="cancelEdit"
       />
@@ -508,8 +543,10 @@ onBeforeUnmount(() => {
               @dragend="dragId = null"
             >
               <span
-                >{{ entry.name
-                }}<small v-if="entry.pinned"> · {{ t('config.pinnedTag') }}</small></span
+                >{{ entry.name }}<small v-if="entry.pinned"> · {{ t('config.pinnedTag') }}</small
+                ><small v-if="nearIsleEntryId === entry.id">
+                  · {{ t('config.nearIsleTag') }}</small
+                ></span
               ><button
                 class="btn"
                 type="button"
@@ -583,10 +620,12 @@ onBeforeUnmount(() => {
                 :entry="entry"
                 :now="now"
                 :expanded="expanded === entry.id"
+                :near-isle="nearIsleEntryId === entry.id"
                 :disabled="busy || !!error"
                 @expand="expanded = expanded === entry.id ? null : entry.id"
                 @edit="beginEdit(entry)"
                 @pin="togglePin(entry)"
+                @near-isle="toggleNearIsle(entry)"
                 @archive="setArchived(entry, true)"
                 @restore="setArchived(entry, false)"
                 @duplicate="

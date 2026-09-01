@@ -9,6 +9,7 @@ import {
   formatCompactEntryMeta,
   formatCompactEntryText,
   formatEntryText,
+  isExpiredCountdown,
 } from '../utils/entries';
 const props = defineProps<{ entry: Entry; now: number; compact?: boolean }>();
 defineEmits<{ edit: [entry: Entry] }>();
@@ -21,12 +22,13 @@ const dot = computed(() => {
 const text = computed(() => formatEntryText(props.entry, props.now, t));
 const compactText = computed(() => formatCompactEntryText(props.entry, props.now, t));
 const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now, t));
+const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 </script>
 
 <template>
   <button
     class="feature"
-    :class="{ compact }"
+    :class="{ compact, elapsed: entry.entryType === 'elapsed', expired }"
     type="button"
     :data-entry-id="entry.id"
     :aria-label="compact ? `${entry.name} — ${text}` : undefined"
@@ -49,9 +51,11 @@ const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now
     </div>
     <template v-if="compact">
       <strong class="feature__value">{{ compactText }}</strong>
-      <span v-if="progress" class="tide" aria-hidden="true">
-        <span :style="{ width: `${progress.progress * 100}%` }" />
-        <i :style="{ left: `${progress.progress * 100}%` }" />
+      <span class="tide" :class="{ 'tide--static': !progress }" aria-hidden="true">
+        <template v-if="progress">
+          <span :style="{ width: `${progress.progress * 100}%` }" />
+          <i :style="{ left: `${progress.progress * 100}%` }" />
+        </template>
       </span>
     </template>
     <div v-else-if="progress" class="arc" aria-hidden="true">
@@ -65,14 +69,18 @@ const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now
         />
         <circle :cx="dot.x" :cy="dot.y" r="3.2" fill="var(--ts-blue)" />
       </svg>
-      <div class="arc__number">
-        {{ progress.days }}<small>{{ t('config.unit.day') }}</small>
+      <div class="arc__number" :class="{ 'arc__number--long': entry.time }">
+        <template v-if="entry.time">{{ compactText }}</template
+        ><template v-else
+          >{{ progress.days }}<small>{{ t('config.unit.day') }}</small></template
+        >
       </div>
       <span class="arc__start">{{ progress.start.slice(5).replace('-', '.') }}</span>
-      <span class="arc__end">{{ entry.date.slice(5).replace('-', '.') }}</span>
+      <span class="arc__end">{{ progress.end.slice(5).replace('-', '.') }}</span>
     </div>
+    <strong v-else class="feature__standalone-value">{{ compactText }}</strong>
     <span v-if="progress" class="sr-only">{{
-      t('config.progressRange', { start: progress.start, end: entry.date })
+      t('config.progressRange', { start: progress.start, end: progress.end })
     }}</span>
   </button>
 </template>
@@ -131,6 +139,16 @@ const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now
 .feature__meaning {
   color: var(--ts-blue);
 }
+.feature.elapsed .feature__meaning,
+.feature.elapsed .feature__standalone-value,
+.feature.elapsed .feature__value {
+  color: var(--ts-teal);
+}
+.feature.expired .feature__meaning,
+.feature.expired .feature__standalone-value,
+.feature.expired .feature__value {
+  color: var(--ts-coral);
+}
 .arc {
   position: relative;
   width: 120px;
@@ -169,6 +187,11 @@ const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now
   margin-top: 8px;
   letter-spacing: 0;
   color: var(--ts-text-2);
+}
+.arc__number--long {
+  top: 38px;
+  font-size: 25px;
+  letter-spacing: -0.03em;
 }
 .arc__start,
 .arc__end {
@@ -217,6 +240,17 @@ const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
+.feature__standalone-value {
+  position: relative;
+  flex: none;
+  max-width: 46%;
+  color: var(--ts-blue);
+  font-size: 28px;
+  font-weight: 450;
+  line-height: 1.3;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .tide {
   position: absolute;
   left: 16px;
@@ -238,6 +272,10 @@ const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now
   margin-left: -3px;
   background: var(--ts-blue);
   border-radius: 50%;
+}
+.tide--static {
+  background: linear-gradient(90deg, var(--ts-line), var(--ts-blue), var(--ts-line));
+  opacity: 0.5;
 }
 @media (prefers-contrast: more), (forced-colors: active) {
   .feature::before {

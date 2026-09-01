@@ -13,13 +13,20 @@ import IslandAtmosphere from './components/IslandAtmosphere.vue';
 import InterfaceSymbol from './components/InterfaceSymbol.vue';
 
 const { t, locale } = useI18n();
-const { entries, loaded, loading, error, busy, reload, upsert } = useEntries();
+const { entries, nearIsleEntryId, loaded, loading, error, busy, reload, upsert, setNearIsle } =
+  useEntries();
 const { settings, error: settingsError, retry: retrySettings } = useSettings();
 const now = useClock();
 const expanded = ref<string | null>(null);
 const actionError = ref('');
 const selection = computed(() =>
-  panelSelection(entries.value, now.value, settings.value.showExpired, settings.value.panelLimit),
+  panelSelection(
+    entries.value,
+    nearIsleEntryId.value,
+    now.value,
+    settings.value.showExpired,
+    settings.value.panelLimit,
+  ),
 );
 const empty = computed(() => !selection.value.featured && selection.value.groups.length === 0);
 const today = computed(() =>
@@ -42,6 +49,8 @@ const openCreate = () => act(() => invoke('open_main_create'));
 const openEdit = (entry: Entry) => act(() => invoke('open_entry_editor', { id: entry.id }));
 const pin = (entry: Entry) =>
   act(() => upsert({ ...entry, pinned: !entry.pinned, updatedAt: new Date().toISOString() }));
+const toggleNearIsle = (entry: Entry) =>
+  act(() => setNearIsle(nearIsleEntryId.value === entry.id ? undefined : entry.id));
 </script>
 
 <template>
@@ -111,11 +120,13 @@ const pin = (entry: Entry) =>
             :entry="entry"
             :now="now"
             :expanded="expanded === entry.id"
+            :near-isle="nearIsleEntryId === entry.id"
             compact
             :disabled="busy || !!error"
             @expand="expanded = expanded === entry.id ? null : entry.id"
             @edit="openEdit(entry)"
             @pin="pin(entry)"
+            @near-isle="toggleNearIsle(entry)"
           />
         </ul>
       </section>

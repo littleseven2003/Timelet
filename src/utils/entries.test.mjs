@@ -153,6 +153,10 @@ test('周一至周五在周五到达后推进到下周一', () => {
   assert.equal(u.effectiveDateIso(workday, fridayAfter), '2026-09-07');
   assert.equal(next.getDay(), 1);
   assert.equal(u.sectionOf(workday, fridayAfter), 'soon');
+  const progress = u.entryProgress(workday, fridayAfter);
+  assert.equal(progress.start, '2026-09-04');
+  assert.equal(progress.end, '2026-09-07');
+  assert.ok(progress.progress > 0 && progress.progress < 1);
 });
 
 test('面板按条目限额，排除归档与近屿重复，无进度区间不隐藏条目', () => {
@@ -160,7 +164,7 @@ test('面板按条目限额，排除归档与近屿重复，无进度区间不�
   const items = Array.from({ length: 50 }, (_, i) =>
     entry({ id: `${i}`, pinned: i === 0, archived: i === 1 }),
   );
-  const selected = u.panelSelection(items, now, true);
+  const selected = u.panelSelection(items, '0', now, true);
   const ids = [
     selected.featured?.id,
     ...selected.groups.flatMap((g) => g.items.map((e) => e.id)),
@@ -169,9 +173,22 @@ test('面板按条目限额，排除归档与近屿重复，无进度区间不�
   assert.equal(new Set(ids).size, 6);
   assert.ok(!ids.includes('1'));
   const invalid = entry({ pinned: true, createdAt: 'broken' });
-  assert.equal(u.featuredEntry([invalid], now), null);
-  assert.equal(u.panelSelection([invalid], now, true).groups[0].items.length, 1);
-  assert.equal(u.panelSelection([entry({ pinned: true })], now, true).groups.length, 0);
+  assert.equal(u.featuredEntry([invalid], invalid.id), invalid);
+  assert.equal(u.entryProgress(invalid, now), null);
+  assert.equal(u.panelSelection([invalid], null, now, true).groups[0].items.length, 1);
+  assert.equal(u.panelSelection([entry({ pinned: true })], 'a', now, true).groups.length, 0);
+});
+
+test('近屿由显式单选决定，可展示正数日和被普通筛选隐藏的过期条目', () => {
+  const now = new Date('2026-09-10T12:00:00').getTime();
+  const elapsed = entry({ id: 'elapsed', entryType: 'elapsed', date: '2026-08-01' });
+  assert.equal(u.featuredEntry([elapsed], 'elapsed'), elapsed);
+  assert.equal(u.entryProgress(elapsed, now), null);
+
+  const expired = entry({ id: 'expired', date: '2026-09-01' });
+  const selected = u.panelSelection([expired], 'expired', now, false);
+  assert.equal(selected.featured, expired);
+  assert.equal(selected.groups.length, 0);
 });
 
 test('整月差对称，时刻正数日不误称过期，无效日期不产生数字', () => {

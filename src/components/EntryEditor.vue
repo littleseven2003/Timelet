@@ -9,12 +9,14 @@ import SegmentedControl from './SegmentedControl.vue';
 import ToggleSwitch from './ToggleSwitch.vue';
 
 const draft = defineModel<Entry>({ required: true });
+const nearIsle = defineModel<boolean>('nearIsle', { required: true });
 const props = defineProps<{
   isNew: boolean;
   now: number;
   busy: boolean;
   blocked?: boolean;
   error?: string;
+  nearIsleReplacement?: string;
 }>();
 const emit = defineEmits<{ save: [entry: Entry]; cancel: [] }>();
 const { t } = useI18n();
@@ -186,6 +188,17 @@ defineExpose({ submit: () => form.value?.requestSubmit() });
           ><span>{{ t('config.fieldPinned') }}</span
           ><ToggleSwitch v-model="draft.pinned"
         /></label>
+        <label class="inline-field"
+          ><span>{{ t('config.fieldNearIsle') }}</span
+          ><ToggleSwitch v-model="nearIsle"
+        /></label>
+        <small class="option-hint">
+          {{
+            nearIsle && nearIsleReplacement
+              ? t('config.nearIsleReplaceHint', { name: nearIsleReplacement })
+              : t('config.nearIsleHint')
+          }}
+        </small>
         <div class="field">
           <label for="entry-note">{{ t('config.fieldNote') }}</label
           ><textarea
@@ -309,9 +322,14 @@ summary {
   margin-top: 16px;
 }
 .frequency-field small,
-.more small {
+.more small,
+.option-hint {
   color: var(--ts-text-2);
   line-height: 1.6;
+}
+.option-hint {
+  display: block;
+  margin: -2px 0 8px;
 }
 .editor-actions {
   display: flex;
