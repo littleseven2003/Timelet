@@ -184,31 +184,25 @@ const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now
   right: 6px;
 }
 .compact {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto auto;
-  padding: 14px 16px 20px;
-  gap: 4px 12px;
+  display: flex;
+  align-items: center;
+  padding: 12px 14px 18px;
+  gap: 10px;
   border-radius: 10px 10px 20px 10px;
 }
 .compact .feature__copy {
-  display: contents;
-}
-.compact .feature__eyebrow {
-  grid-column: 1 / -1;
-  grid-row: 1;
+  display: grid;
+  gap: 3px;
+  flex: 1;
+  overflow: hidden;
 }
 .compact .feature__name {
-  grid-column: 1 / -1;
-  grid-row: 2;
   font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .compact .feature__date {
-  grid-column: 1;
-  grid-row: 3;
   font-size: 10px;
   white-space: nowrap;
   overflow: hidden;
@@ -216,8 +210,6 @@ const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now
 }
 .feature__value {
   position: relative;
-  grid-column: 2;
-  grid-row: 3;
   flex: none;
   white-space: nowrap;
   color: var(--ts-blue);

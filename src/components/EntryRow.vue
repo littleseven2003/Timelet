@@ -203,21 +203,21 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 .compact .entry-row__summary {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
   align-items: center;
-  padding: 13px 3px;
-  gap: 3px 9px;
+  padding: 9px 3px;
+  gap: 9px;
 }
 .compact .entry-row__symbol {
   grid-column: 1;
-  grid-row: 1 / span 2;
+  grid-row: 1;
 }
 .compact .entry-row__body {
-  display: contents;
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  gap: 1px;
 }
 .compact .entry-row__title {
-  grid-column: 2 / -1;
-  grid-row: 1;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -225,15 +225,14 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 }
 .compact .entry-row__value {
   grid-column: 3;
-  grid-row: 2;
+  grid-row: 1;
+  align-self: center;
   font-size: 16px;
   flex: none;
   max-width: none;
   white-space: nowrap;
 }
 .compact .entry-row__meta {
-  grid-column: 2;
-  grid-row: 2;
   font-size: 10px;
   white-space: nowrap;
   overflow: hidden;
