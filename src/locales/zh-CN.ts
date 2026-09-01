@@ -65,6 +65,26 @@ export default {
       hoursMinutes: '尚未开始 · 还有 {h} 小时 {m} 分',
       minutes: '尚未开始 · 还有 {m} 分钟',
     },
+    compact: {
+      today: '今天',
+      soon: '即将',
+      expiredOnly: '已到时',
+      justStarted: '刚刚',
+      since: '已{duration}',
+      after: '{duration}后',
+      overdue: '超{duration}',
+      monthDay: '{month}月{day}日',
+      yearMonthDay: '{year}年{month}月{day}日',
+      duration: {
+        day: '{n}天',
+        week: '{n}周',
+        month: '{n}个月',
+        year: '{n}年',
+        daysHours: '{d}天{h}时',
+        hoursMinutes: '{h}时{m}分',
+        minutes: '{m}分',
+      },
+    },
   },
   config: {
     nav: {

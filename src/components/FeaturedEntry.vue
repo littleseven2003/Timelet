@@ -2,7 +2,14 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Entry } from '../types/entry';
-import { effectiveDateIso, effectiveTime, entryProgress, formatEntryText } from '../utils/entries';
+import {
+  effectiveDateIso,
+  effectiveTime,
+  entryProgress,
+  formatCompactEntryMeta,
+  formatCompactEntryText,
+  formatEntryText,
+} from '../utils/entries';
 const props = defineProps<{ entry: Entry; now: number; compact?: boolean }>();
 defineEmits<{ edit: [entry: Entry] }>();
 const { t } = useI18n();
@@ -12,6 +19,8 @@ const dot = computed(() => {
   return { x: 60 + 52 * Math.cos(angle), y: 60 + 52 * Math.sin(angle) };
 });
 const text = computed(() => formatEntryText(props.entry, props.now, t));
+const compactText = computed(() => formatCompactEntryText(props.entry, props.now, t));
+const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now, t));
 </script>
 
 <template>
@@ -20,22 +29,26 @@ const text = computed(() => formatEntryText(props.entry, props.now, t));
     :class="{ compact }"
     type="button"
     :data-entry-id="entry.id"
-    :title="compact ? entry.name : undefined"
+    :aria-label="compact ? `${entry.name} — ${text}` : undefined"
+    :title="compact ? `${entry.name} · ${compactMeta} · ${text}` : undefined"
     @click="$emit('edit', entry)"
   >
     <div class="feature__copy">
       <span class="feature__eyebrow">{{ t('config.featuredLabel') }}</span>
       <strong class="feature__name">{{ entry.name }}</strong>
-      <span class="feature__date"
-        ><template v-if="entry.repeat && entry.entryType === 'countdown'"
-          >{{ t(`config.repeat.${entry.repeat}`) }} · {{ t('config.nextOccurrence') }} </template
-        >{{ effectiveDateIso(entry, now)
-        }}<template v-if="entry.time"> · {{ effectiveTime(entry, now) }}</template></span
-      >
+      <span class="feature__date">
+        <template v-if="compact">{{ compactMeta }}</template>
+        <template v-else
+          ><template v-if="entry.repeat && entry.entryType === 'countdown'"
+            >{{ t(`config.repeat.${entry.repeat}`) }} · {{ t('config.nextOccurrence') }} </template
+          >{{ effectiveDateIso(entry, now)
+          }}<template v-if="entry.time"> · {{ effectiveTime(entry, now) }}</template></template
+        >
+      </span>
       <span v-if="!compact" class="feature__meaning">{{ text }}</span>
     </div>
     <template v-if="compact">
-      <strong class="feature__value">{{ text }}</strong>
+      <strong class="feature__value">{{ compactText }}</strong>
       <span v-if="progress" class="tide" aria-hidden="true">
         <span :style="{ width: `${progress.progress * 100}%` }" />
         <i :style="{ left: `${progress.progress * 100}%` }" />
@@ -171,22 +184,31 @@ const text = computed(() => formatEntryText(props.entry, props.now, t));
   right: 6px;
 }
 .compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
   padding: 14px 16px 20px;
-  gap: 12px;
+  gap: 4px 12px;
   border-radius: 10px 10px 20px 10px;
 }
 .compact .feature__copy {
-  gap: 5px;
-  flex: 1;
-  overflow: hidden;
+  display: contents;
+}
+.compact .feature__eyebrow {
+  grid-column: 1 / -1;
+  grid-row: 1;
 }
 .compact .feature__name {
+  grid-column: 1 / -1;
+  grid-row: 2;
   font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .compact .feature__date {
+  grid-column: 1;
+  grid-row: 3;
   font-size: 10px;
   white-space: nowrap;
   overflow: hidden;
@@ -194,6 +216,8 @@ const text = computed(() => formatEntryText(props.entry, props.now, t));
 }
 .feature__value {
   position: relative;
+  grid-column: 2;
+  grid-row: 3;
   flex: none;
   white-space: nowrap;
   color: var(--ts-blue);

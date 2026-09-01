@@ -119,7 +119,7 @@ export function isExpiredCountdown(entry: Entry, nowMs = Date.now()): boolean {
     : addDays(entryDeadline(entry), 1).getTime() <= nowMs;
 }
 
-type Translate = (key: string, params?: Record<string, number>) => string;
+type Translate = (key: string, params?: Record<string, string | number>) => string;
 export function formatEntryText(entry: Entry, nowMs: number, t: Translate): string {
   if (!isValidDate(entry.date)) return '';
   if (entry.time) return timedText(entry, nowMs, t);
@@ -136,6 +136,72 @@ export function formatEntryText(entry: Entry, nowMs: number, t: Translate): stri
     return t(`panel.${days > 0 ? 'units' : 'expiredUnits'}.${unit}`, { n: Math.abs(value) });
   }
   return t(days > 0 ? 'panel.daysLeft' : 'panel.expired', { days: Math.abs(days) });
+}
+
+function compactDuration(unit: DisplayUnit, value: number, t: Translate): string {
+  return t(`panel.compact.duration.${unit}`, { n: value });
+}
+
+function compactTimedDuration(diff: number, t: Translate): string {
+  const minutesTotal = Math.floor(Math.abs(diff) / 60_000);
+  const days = Math.floor(minutesTotal / 1440);
+  const hours = Math.floor((minutesTotal % 1440) / 60);
+  const minutes = minutesTotal % 60;
+  if (days > 0) return t('panel.compact.duration.daysHours', { d: days, h: hours });
+  if (hours > 0) return t('panel.compact.duration.hoursMinutes', { h: hours, m: minutes });
+  if (minutes > 0) return t('panel.compact.duration.minutes', { m: minutes });
+  return '';
+}
+
+// 快捷面板只保留辨认条目所需的最短时间语义，完整叙述留在主窗口。
+export function formatCompactEntryText(entry: Entry, nowMs: number, t: Translate): string {
+  if (!isValidDate(entry.date)) return '';
+  if (entry.time) {
+    const diff = effectiveDeadline(entry, nowMs).getTime() - nowMs;
+    const duration = compactTimedDuration(diff, t);
+    if (!duration) {
+      if (entry.entryType === 'elapsed') {
+        return t(diff > 0 ? 'panel.compact.soon' : 'panel.compact.justStarted');
+      }
+      return t(diff < 0 ? 'panel.compact.expiredOnly' : 'panel.compact.soon');
+    }
+    if (entry.entryType === 'elapsed') {
+      return t(diff > 0 ? 'panel.compact.after' : 'panel.compact.since', { duration });
+    }
+    return diff < 0 ? t('panel.compact.overdue', { duration }) : duration;
+  }
+
+  const days = entryDays(entry, startOfToday(nowMs));
+  if (entry.entryType === 'countdown' && days === 0) return t('panel.compact.today');
+  if (entry.entryType === 'elapsed' && days === 0) return t('panel.compact.justStarted');
+  const preferredUnit = entry.displayUnit ?? 'day';
+  const preferredValue = entryUnitValue(entry, preferredUnit, nowMs) ?? 0;
+  const unit = preferredUnit !== 'day' && Math.abs(preferredValue) > 0 ? preferredUnit : 'day';
+  const value = unit === 'day' ? Math.abs(days) : Math.abs(preferredValue);
+  const duration = compactDuration(unit, value, t);
+  if (entry.entryType === 'elapsed') {
+    return t(days < 0 ? 'panel.compact.after' : 'panel.compact.since', { duration });
+  }
+  return days < 0 ? t('panel.compact.overdue', { duration }) : duration;
+}
+
+export function formatCompactEntryMeta(entry: Entry, nowMs: number, t: Translate): string {
+  if (!isValidDate(entry.date)) return '';
+  if (entry.repeat && entry.time && entry.entryType === 'countdown') {
+    return `${t(`config.repeat.${entry.repeat}`)} · ${effectiveTime(entry, nowMs)}`;
+  }
+  const date = effectiveDeadline(entry, nowMs);
+  const now = new Date(nowMs);
+  const key =
+    date.getFullYear() === now.getFullYear()
+      ? 'panel.compact.monthDay'
+      : 'panel.compact.yearMonthDay';
+  const dateText = t(key, {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+  });
+  return entry.time ? `${dateText} · ${effectiveTime(entry, nowMs)}` : dateText;
 }
 
 function timedText(entry: Entry, nowMs: number, t: Translate): string {

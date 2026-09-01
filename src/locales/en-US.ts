@@ -65,6 +65,26 @@ export default {
       hoursMinutes: 'Starts in {h}h {m}min',
       minutes: 'Starts in {m}min',
     },
+    compact: {
+      today: 'Today',
+      soon: 'Soon',
+      expiredOnly: 'Overdue',
+      justStarted: 'Just now',
+      since: '{duration} ago',
+      after: 'In {duration}',
+      overdue: '{duration} over',
+      monthDay: '{month}/{day}',
+      yearMonthDay: '{year}/{month}/{day}',
+      duration: {
+        day: '{n}d',
+        week: '{n}wk',
+        month: '{n}mo',
+        year: '{n}yr',
+        daysHours: '{d}d {h}h',
+        hoursMinutes: '{h}h {m}m',
+        minutes: '{m}m',
+      },
+    },
   },
   config: {
     nav: {

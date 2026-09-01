@@ -5,6 +5,8 @@ import type { Entry } from '../types/entry';
 import {
   effectiveTime,
   effectiveDateIso,
+  formatCompactEntryMeta,
+  formatCompactEntryText,
   formatEntryText,
   isExpiredCountdown,
 } from '../utils/entries';
@@ -27,6 +29,8 @@ defineEmits<{
 }>();
 const { t } = useI18n();
 const text = computed(() => formatEntryText(props.entry, props.now, t));
+const compactText = computed(() => formatCompactEntryText(props.entry, props.now, t));
+const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now, t));
 const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 </script>
 
@@ -38,7 +42,8 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
       :data-entry-id="entry.id"
       :aria-expanded="!!expanded"
       :aria-controls="`detail-${entry.id}`"
-      :title="compact ? entry.name : undefined"
+      :aria-label="compact ? `${entry.name} — ${text}` : undefined"
+      :title="compact ? `${entry.name} · ${compactMeta} · ${text}` : undefined"
       @click="$emit('expand')"
       @contextmenu.prevent="$emit('expand')"
     >
@@ -48,17 +53,23 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
           >{{ entry.name
           }}<span v-if="entry.pinned" class="pin" :aria-label="t('config.pinnedTag')">·</span></span
         >
-        <span class="entry-row__meta"
-          >{{ t(entry.entryType === 'countdown' ? 'config.typeCountdown' : 'config.typeElapsed') }}
-          <template v-if="entry.repeat && entry.entryType === 'countdown'">
-            · {{ t(`config.repeat.${entry.repeat}`) }} · {{ t('config.nextOccurrence') }} </template
-          ><template v-else> · </template> {{ effectiveDateIso(entry, now)
-          }}<template v-if="entry.time"> {{ effectiveTime(entry, now) }}</template></span
-        >
+        <span class="entry-row__meta">
+          <template v-if="compact">{{ compactMeta }}</template>
+          <template v-else
+            >{{
+              t(entry.entryType === 'countdown' ? 'config.typeCountdown' : 'config.typeElapsed')
+            }}
+            <template v-if="entry.repeat && entry.entryType === 'countdown'">
+              · {{ t(`config.repeat.${entry.repeat}`) }} ·
+              {{ t('config.nextOccurrence') }} </template
+            ><template v-else> · </template> {{ effectiveDateIso(entry, now)
+            }}<template v-if="entry.time"> {{ effectiveTime(entry, now) }}</template></template
+          >
+        </span>
       </span>
-      <span class="entry-row__value" :class="{ expired, elapsed: entry.entryType === 'elapsed' }">{{
-        text
-      }}</span>
+      <span class="entry-row__value" :class="{ expired, elapsed: entry.entryType === 'elapsed' }">
+        {{ compact ? compactText : text }}
+      </span>
     </button>
     <div v-if="expanded" :id="`detail-${entry.id}`" class="entry-row__detail">
       <p v-if="entry.note" class="entry-row__note">{{ entry.note }}</p>
@@ -190,22 +201,39 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
   margin-left: auto;
 }
 .compact .entry-row__summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
   padding: 13px 3px;
-  gap: 9px;
+  gap: 3px 9px;
+}
+.compact .entry-row__symbol {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.compact .entry-row__body {
+  display: contents;
 }
 .compact .entry-row__title {
+  grid-column: 2 / -1;
+  grid-row: 1;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .compact .entry-row__value {
+  grid-column: 3;
+  grid-row: 2;
   font-size: 16px;
   flex: none;
   max-width: none;
   white-space: nowrap;
 }
 .compact .entry-row__meta {
+  grid-column: 2;
+  grid-row: 2;
   font-size: 10px;
   white-space: nowrap;
   overflow: hidden;
