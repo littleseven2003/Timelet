@@ -25,6 +25,7 @@ pub fn run() {
             storage::entry_list,
             storage::entry_save,
             storage::entry_delete,
+            storage::entry_set_near_isle,
             storage::entry_reorder,
             settings::settings_get,
             settings::settings_set,

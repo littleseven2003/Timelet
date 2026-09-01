@@ -37,6 +37,12 @@ pub struct Entry {
 #[serde(deny_unknown_fields)]
 struct Store {
     schema_version: u32,
+    #[serde(
+        rename = "nearIsleEntryId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    near_isle_entry_id: Option<String>,
     entries: Vec<Entry>,
 }
 
@@ -44,6 +50,7 @@ impl Default for Store {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
+            near_isle_entry_id: None,
             entries: Vec::new(),
         }
     }
@@ -77,6 +84,14 @@ impl Document for Store {
                     entry.name
                 ));
             }
+        }
+        if self.near_isle_entry_id.as_ref().is_some_and(|id| {
+            !self
+                .entries
+                .iter()
+                .any(|entry| entry.id == *id && entry.archived != Some(true))
+        }) {
+            return Err("近屿条目不存在或已归档".into());
         }
         Ok(())
     }
@@ -123,7 +138,16 @@ fn valid_time(time: &str) -> bool {
 }
 
 impl Store {
-    fn upsert(&mut self, entry: Entry, expected: Option<&str>) -> Result<(), String> {
+    fn upsert(
+        &mut self,
+        entry: Entry,
+        expected: Option<&str>,
+        near_isle: Option<bool>,
+    ) -> Result<(), String> {
+        if near_isle == Some(true) && entry.archived == Some(true) {
+            return Err("归档条目不能设为近屿".into());
+        }
+        let id = entry.id.clone();
         match self.entries.iter_mut().find(|e| e.id == entry.id) {
             Some(existing) => {
                 if expected != Some(existing.updated_at.as_str()) {
@@ -134,8 +158,44 @@ impl Store {
             None if expected.is_some() => return Err("条目已被删除，未重新创建旧记录".into()),
             None => self.entries.push(entry),
         }
+        if self.near_isle_entry_id.as_deref() == Some(id.as_str())
+            && self
+                .entries
+                .iter()
+                .find(|entry| entry.id == id)
+                .is_some_and(|entry| entry.archived == Some(true))
+        {
+            self.near_isle_entry_id = None;
+        }
+        match near_isle {
+            Some(true) => self.near_isle_entry_id = Some(id),
+            Some(false) if self.near_isle_entry_id.as_deref() == Some(id.as_str()) => {
+                self.near_isle_entry_id = None;
+            }
+            _ => {}
+        }
         Ok(())
     }
+
+    fn set_near_isle(&mut self, id: Option<String>) -> Result<(), String> {
+        if id.as_ref().is_some_and(|target| {
+            !self
+                .entries
+                .iter()
+                .any(|entry| entry.id == *target && entry.archived != Some(true))
+        }) {
+            return Err("只能将未归档的现有条目设为近屿".into());
+        }
+        self.near_isle_entry_id = id;
+        Ok(())
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntrySnapshot {
+    entries: Vec<Entry>,
+    near_isle_entry_id: Option<String>,
 }
 
 pub struct EntryStore(DataFile<Store>);
@@ -147,8 +207,12 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
 }
 
 #[tauri::command]
-pub fn entry_list(state: State<'_, EntryStore>) -> Result<Vec<Entry>, String> {
-    Ok(state.0.read()?.entries)
+pub fn entry_list(state: State<'_, EntryStore>) -> Result<EntrySnapshot, String> {
+    let store = state.0.read()?;
+    Ok(EntrySnapshot {
+        entries: store.entries,
+        near_isle_entry_id: store.near_isle_entry_id,
+    })
 }
 
 #[tauri::command]
@@ -157,6 +221,7 @@ pub fn entry_save(
     state: State<'_, EntryStore>,
     entry: Entry,
     expected_updated_at: Option<String>,
+    near_isle: Option<bool>,
 ) -> Result<(), String> {
     if entry.name.trim().is_empty() || !matches!(entry.entry_type.as_str(), "countdown" | "elapsed")
     {
@@ -164,7 +229,7 @@ pub fn entry_save(
     }
     state
         .0
-        .change(|store| store.upsert(entry, expected_updated_at.as_deref()))?;
+        .change(|store| store.upsert(entry, expected_updated_at.as_deref(), near_isle))?;
     notify_changed(&app);
     Ok(())
 }
@@ -177,8 +242,22 @@ pub fn entry_delete(
 ) -> Result<(), String> {
     state.0.change(|store| {
         store.entries.retain(|e| e.id != id);
+        if store.near_isle_entry_id.as_deref() == Some(id.as_str()) {
+            store.near_isle_entry_id = None;
+        }
         Ok(())
     })?;
+    notify_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn entry_set_near_isle(
+    app: AppHandle,
+    state: State<'_, EntryStore>,
+    id: Option<String>,
+) -> Result<(), String> {
+    state.0.change(|store| store.set_near_isle(id))?;
     notify_changed(&app);
     Ok(())
 }
@@ -229,6 +308,7 @@ mod tests {
         let store: Store = serde_json::from_str(current).unwrap();
         assert!(store.validate().is_ok());
         assert_eq!(store.entries[0].archived, None);
+        assert_eq!(store.near_isle_entry_id, None);
         let legacy: Store =
             serde_json::from_str(&current.replace("schema_version\":2", "schema_version\":1"))
                 .unwrap();
@@ -277,11 +357,27 @@ mod tests {
         let mut store: Store = serde_json::from_str(r##"{"schema_version":2,"entries":[{"id":"a","name":"日期","entryType":"countdown","date":"2026-09-01","pinned":false,"createdAt":"old","updatedAt":"new"}]}"##).unwrap();
         let mut stale = store.entries[0].clone();
         stale.name = "旧编辑".into();
-        assert!(store.upsert(stale.clone(), Some("old")).is_err());
+        assert!(store.upsert(stale.clone(), Some("old"), None).is_err());
         assert_eq!(store.entries[0].name, "日期");
-        assert!(store.upsert(stale.clone(), Some("new")).is_ok());
+        assert!(store.upsert(stale.clone(), Some("new"), None).is_ok());
         store.entries.clear();
-        assert!(store.upsert(stale, Some("new")).is_err());
+        assert!(store.upsert(stale, Some("new"), None).is_err());
         assert!(store.entries.is_empty());
+    }
+
+    #[test]
+    fn near_isle_is_single_and_clears_when_archived_or_deleted() {
+        let mut store: Store = serde_json::from_str(r##"{"schema_version":2,"entries":[{"id":"a","name":"日期 A","entryType":"countdown","date":"2026-09-01","pinned":false,"createdAt":"old","updatedAt":"a"},{"id":"b","name":"日期 B","entryType":"elapsed","date":"2026-08-01","pinned":false,"createdAt":"old","updatedAt":"b"}]}"##).unwrap();
+        store.set_near_isle(Some("a".into())).unwrap();
+        assert_eq!(store.near_isle_entry_id.as_deref(), Some("a"));
+        store.set_near_isle(Some("b".into())).unwrap();
+        assert_eq!(store.near_isle_entry_id.as_deref(), Some("b"));
+
+        let mut archived = store.entries[1].clone();
+        archived.archived = Some(true);
+        archived.updated_at = "b2".into();
+        store.upsert(archived, Some("b"), None).unwrap();
+        assert_eq!(store.near_isle_entry_id, None);
+        assert!(store.set_near_isle(Some("missing".into())).is_err());
     }
 }

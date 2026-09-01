@@ -1,9 +1,16 @@
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { Entry } from '../types/entry';
-import { deleteEntry, listEntries, reorderEntries, saveEntry } from '../api/entries';
+import {
+  deleteEntry,
+  listEntries,
+  reorderEntries,
+  saveEntry,
+  setNearIsleEntry,
+} from '../api/entries';
 
 const entries = ref<Entry[]>([]);
+const nearIsleEntryId = ref<string | null>(null);
 const loaded = ref(false);
 const loading = ref(false);
 const loadError = ref('');
@@ -21,7 +28,8 @@ async function reload() {
   try {
     const result = await listEntries();
     if (version !== request) return;
-    entries.value = result;
+    entries.value = result.entries;
+    nearIsleEntryId.value = result.nearIsleEntryId ?? null;
     loaded.value = true;
     loadError.value = '';
   } catch (cause) {
@@ -86,14 +94,16 @@ export function useEntries() {
   const upsert = (
     entry: Entry,
     expectedUpdatedAt = entries.value.find((item) => item.id === entry.id)?.updatedAt,
+    nearIsle?: boolean,
   ) => {
     const previous = Date.parse(expectedUpdatedAt ?? '');
     const updatedAt = new Date(
       Math.max(Date.now(), Number.isFinite(previous) ? previous + 1 : 0),
     ).toISOString();
-    return mutate(() => saveEntry({ ...entry, updatedAt }, expectedUpdatedAt));
+    return mutate(() => saveEntry({ ...entry, updatedAt }, expectedUpdatedAt, nearIsle));
   };
   const remove = (id: string) => mutate(() => deleteEntry(id));
+  const setNearIsle = (id?: string) => mutate(() => setNearIsleEntry(id));
   const reorder = (ids: string[], reset = false) => mutate(() => reorderEntries(ids, reset));
   const setArchive = async (id: string, archived: boolean) => {
     const target = entries.value.find((entry) => entry.id === id);
@@ -116,6 +126,7 @@ export function useEntries() {
   };
   return {
     entries,
+    nearIsleEntryId,
     loaded,
     loading,
     error,
@@ -123,6 +134,7 @@ export function useEntries() {
     reload: retry,
     upsert,
     remove,
+    setNearIsle,
     reorder,
     archive: (id: string) => setArchive(id, true),
     restore: (id: string) => setArchive(id, false),
