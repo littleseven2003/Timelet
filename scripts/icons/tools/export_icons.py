@@ -1,3 +1,8 @@
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -8,8 +13,13 @@ MASTERS = ROOT / "masters"
 APPICONSET = ROOT / "AppIcon.appiconset"
 THUMBNAILSET = ROOT / "Thumbnail.imageset"
 EXPORTS = ROOT / "exports"
+PROJECT_ROOT = ROOT.parents[1]
+TAURI_ICONS = PROJECT_ROOT / "src-tauri" / "icons"
+FRONTEND_ICON = PROJECT_ROOT / "src" / "assets" / "app-icon.png"
+ICON_COMPOSER_SOURCE = TAURI_ICONS / "Timelet.icon"
 
 APP_SOURCE = MASTERS / "timelet-app-icon-source.png"
+MACOS_LEGACY_MASTER = MASTERS / "timelet-app-icon-macos-padded-1024.png"
 THUMB_SOURCE = MASTERS / "timelet-thumbnail-source.png"
 
 RESAMPLE = Image.Resampling.LANCZOS
@@ -20,13 +30,13 @@ def save_resized(image: Image.Image, path: Path, size: int) -> None:
     image.resize((size, size), RESAMPLE).save(path, optimize=True)
 
 
-def make_app_masters() -> tuple[Image.Image, Image.Image]:
+def make_app_masters() -> tuple[Image.Image, Image.Image, Image.Image]:
     source = Image.open(APP_SOURCE).convert("RGBA")
 
     # Crop away the generation margin while retaining the icon's soft corners.
     artwork = source.crop((80, 80, 1175, 1175)).resize((1024, 1024), RESAMPLE)
 
-    macos = artwork
+    transparent = artwork
 
     # iOS marketing icons cannot contain alpha. Extend the sea palette behind the
     # artwork; the system-applied squircle mask hides the extreme corners.
@@ -46,9 +56,15 @@ def make_app_masters() -> tuple[Image.Image, Image.Image]:
             draw.point((x, y), fill=color)
     ios.paste(artwork.convert("RGB"), mask=artwork.getchannel("A"))
 
-    macos.save(MASTERS / "timelet-app-icon-macos-1024.png", optimize=True)
+    transparent.save(MASTERS / "timelet-app-icon-macos-1024.png", optimize=True)
     ios.save(MASTERS / "timelet-app-icon-ios-1024.png", optimize=True)
-    return macos, ios
+
+    # 传统 macOS 图标保留独立校准过的视觉边距。macOS 26 的系统蒙版
+    # 使用无透明圆角的全幅母版，不能复用这里的双重留白版本。
+    legacy_macos = Image.open(MACOS_LEGACY_MASTER).convert("RGBA")
+    if legacy_macos.size != (1024, 1024):
+        raise RuntimeError("Legacy macOS icon master must be 1024 x 1024")
+    return transparent, ios, legacy_macos
 
 
 def make_thumbnail_master() -> Image.Image:
@@ -75,7 +91,7 @@ def make_thumbnail_master() -> Image.Image:
     return canvas
 
 
-def export_app_icons(macos: Image.Image, ios: Image.Image) -> None:
+def export_app_icons(legacy_macos: Image.Image, ios: Image.Image) -> None:
     ios_sizes = {
         "timelet-ios-20.png": 20,
         "timelet-ios-20@2x.png": 40,
@@ -109,10 +125,127 @@ def export_app_icons(macos: Image.Image, ios: Image.Image) -> None:
         "timelet-mac-512@2x.png": 1024,
     }
     for filename, size in mac_sizes.items():
-        save_resized(macos, APPICONSET / filename, size)
+        save_resized(legacy_macos, APPICONSET / filename, size)
 
     for size in (16, 32, 64, 128, 256, 512, 1024):
         save_resized(ios, EXPORTS / f"timelet-app-icon-{size}.png", size)
+
+
+def export_icns() -> None:
+    pnpm = shutil.which("pnpm")
+    if pnpm is None:
+        raise RuntimeError("pnpm is required to export the macOS ICNS fallback")
+
+    # 复用项目当前的桌面打包工具生成完整 ICNS 尺寸，避免不同系统版本的
+    # iconutil 对同一 iconset 产生不一致结果。
+    with tempfile.TemporaryDirectory(prefix="timelet-icon-") as temp_dir:
+        output = Path(temp_dir) / "icons"
+        subprocess.run(
+            [
+                pnpm,
+                "exec",
+                "tauri",
+                "icon",
+                str(MACOS_LEGACY_MASTER),
+                "--output",
+                str(output),
+            ],
+            cwd=PROJECT_ROOT,
+            check=True,
+        )
+        shutil.copyfile(output / "icon.icns", TAURI_ICONS / "icon.icns")
+
+
+def export_assets_car() -> None:
+    if sys.platform != "darwin":
+        print("Skipping Assets.car export outside macOS")
+        return
+
+    xcrun = shutil.which("xcrun")
+    if xcrun is None:
+        raise RuntimeError("xcrun is required to export the macOS 26 icon catalog")
+    if not ICON_COMPOSER_SOURCE.exists():
+        raise RuntimeError(f"Missing Icon Composer source: {ICON_COMPOSER_SOURCE}")
+
+    # 当前系统工具无法单独编译 .icon 输入；同时提供空资源目录可保持输出
+    # 内容不变，并规避系统工具接受独立图标源之前的编译崩溃。
+    with tempfile.TemporaryDirectory(prefix="timelet-assets-") as temp_dir:
+        temp = Path(temp_dir)
+        catalog = temp / "TimeletAssets.xcassets"
+        output = temp / "compiled"
+        catalog.mkdir()
+        output.mkdir()
+        (catalog / "Contents.json").write_text(
+            json.dumps({"info": {"author": "xcode", "version": 1}}),
+            encoding="utf-8",
+        )
+
+        subprocess.run(
+            [
+                xcrun,
+                "actool",
+                str(ICON_COMPOSER_SOURCE),
+                str(catalog),
+                "--compile",
+                str(output),
+                "--output-format",
+                "human-readable-text",
+                "--notices",
+                "--warnings",
+                "--output-partial-info-plist",
+                str(temp / "assetcatalog_generated_info.plist"),
+                "--app-icon",
+                "Timelet",
+                "--include-all-app-icons",
+                "--target-device",
+                "mac",
+                "--minimum-deployment-target",
+                "26.0",
+                "--platform",
+                "macosx",
+            ],
+            check=True,
+        )
+        shutil.copyfile(output / "Assets.car", TAURI_ICONS / "Assets.car")
+
+
+def export_runtime_icons(transparent: Image.Image, thumbnail: Image.Image) -> None:
+    TAURI_ICONS.mkdir(parents=True, exist_ok=True)
+    FRONTEND_ICON.parent.mkdir(parents=True, exist_ok=True)
+
+    runtime_sizes = {
+        "32x32.png": 32,
+        "64x64.png": 64,
+        "128x128.png": 128,
+        "128x128@2x.png": 256,
+        "icon.png": 512,
+    }
+    for filename, size in runtime_sizes.items():
+        save_resized(transparent, TAURI_ICONS / filename, size)
+
+    windows_sizes = {
+        "Square30x30Logo.png": 30,
+        "Square44x44Logo.png": 44,
+        "StoreLogo.png": 50,
+        "Square71x71Logo.png": 71,
+        "Square89x89Logo.png": 89,
+        "Square107x107Logo.png": 107,
+        "Square142x142Logo.png": 142,
+        "Square150x150Logo.png": 150,
+        "Square284x284Logo.png": 284,
+        "Square310x310Logo.png": 310,
+    }
+    for filename, size in windows_sizes.items():
+        save_resized(transparent, TAURI_ICONS / filename, size)
+
+    transparent.save(
+        TAURI_ICONS / "icon.ico",
+        format="ICO",
+        sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (256, 256)],
+    )
+    export_icns()
+    save_resized(thumbnail, TAURI_ICONS / "tray.png", 44)
+    save_resized(transparent, FRONTEND_ICON, 128)
 
 
 def export_thumbnails(thumbnail: Image.Image) -> None:
@@ -127,10 +260,12 @@ def main() -> None:
     APPICONSET.mkdir(parents=True, exist_ok=True)
     THUMBNAILSET.mkdir(parents=True, exist_ok=True)
     EXPORTS.mkdir(parents=True, exist_ok=True)
-    macos, ios = make_app_masters()
+    transparent, ios, legacy_macos = make_app_masters()
     thumbnail = make_thumbnail_master()
-    export_app_icons(macos, ios)
+    export_app_icons(legacy_macos, ios)
     export_thumbnails(thumbnail)
+    export_runtime_icons(transparent, thumbnail)
+    export_assets_car()
 
 
 if __name__ == "__main__":
