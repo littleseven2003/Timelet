@@ -164,12 +164,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointercancel', stopHold);
 });
 
-// 时刻设为当前时间（取整到 5 分钟）
+// 与逐分钟输入保持一致，不把“现在”提前到上一个五分钟节点。
 function setNow() {
   const now = new Date();
-  const value = `${String(now.getHours()).padStart(2, '0')}:${String(
-    Math.floor(now.getMinutes() / 5) * 5,
-  ).padStart(2, '0')}`;
+  const value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   emit('update:time', value);
 }
 </script>
