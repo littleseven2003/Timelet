@@ -1,17 +1,20 @@
 <script setup lang="ts">
 // 统一开关控件：包含时刻、置顶、设置页共用
-defineProps<{ modelValue: boolean }>();
+const props = defineProps<{ modelValue: boolean }>();
 
-defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
+const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void }>();
+
+function change(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const next = input.checked;
+  // 原生输入会先自行切换；异步保存失败时父值不变，须先恢复为已确认状态。
+  input.checked = props.modelValue;
+  emit('update:modelValue', next);
+}
 </script>
 
 <template>
-  <input
-    type="checkbox"
-    class="toggle"
-    :checked="modelValue"
-    @change="$emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
-  />
+  <input type="checkbox" class="toggle" :checked="modelValue" @change="change" />
 </template>
 
 <style scoped>
