@@ -203,7 +203,7 @@ export default {
     copySuffix: ' (copy)',
     copied: 'Copy created',
     reorder: 'Reorder',
-    autoOrder: 'Automatic order',
+    autoOrder: 'Restore automatic grouping',
     orderHint:
       'Drag or use the up/down buttons, then save. Pinned and other entries are ordered separately.',
     orderChanged: 'Entries changed in another window. Please restart ordering.',

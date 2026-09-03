@@ -202,7 +202,7 @@ export default {
     copySuffix: '（副本）',
     copied: '已创建副本',
     reorder: '调整顺序',
-    autoOrder: '自动排序',
+    autoOrder: '恢复自动分组',
     orderHint: '拖动条目或使用上下按钮调整顺序，保存后生效。置顶与普通条目分别排序。',
     orderChanged: '条目已在其他窗口变化，请重新开始排序。',
     moveUp: '上移 {name}',

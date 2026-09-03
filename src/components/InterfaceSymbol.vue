@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  name: 'now' | 'archive' | 'settings' | 'about' | 'window' | 'search' | 'arrow' | 'plus';
+  name: 'now' | 'archive' | 'settings' | 'about' | 'window' | 'search' | 'arrow' | 'plus' | 'pin';
 }>();
 const paths = {
   now: 'M3 15c3-2 5-2 9 0s6 2 9 0M4 19c3-2 5-2 8 0s5 2 8 0M7 11a5 5 0 0 1 10 0',
@@ -12,6 +12,7 @@ const paths = {
   search: 'M16 16l5 5M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z',
   arrow: 'm9 5 7 7-7 7',
   plus: 'M12 5v14M5 12h14',
+  pin: 'm8 4 8 1-1 6 4 4-6 1-5 5 1-7-4-4 5-1z',
 };
 </script>
 <template>

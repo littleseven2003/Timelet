@@ -52,6 +52,7 @@ const snapshot = ref('');
 const nearIsleSnapshot = ref(false);
 const isNew = ref(false);
 const editor = ref<InstanceType<typeof EntryEditor>>();
+const mainContent = ref<HTMLElement>();
 const dirty = computed(
   () =>
     editing.value !== null &&
@@ -124,6 +125,11 @@ function focusEntry(id?: string) {
     (target ?? document.querySelector<HTMLElement>('[data-create]'))?.focus();
   });
 }
+function resetContentScroll() {
+  void nextTick(() => {
+    if (mainContent.value) mainContent.value.scrollTop = 0;
+  });
+}
 async function run(action: () => Promise<void>, success?: string) {
   actionError.value = '';
   try {
@@ -163,6 +169,9 @@ function navigate(key: Nav) {
     search.value = '';
     expanded.value = null;
     actionError.value = '';
+    message.value = '';
+    undo.value = null;
+    resetContentScroll();
   });
 }
 function beginEdit(entry?: Entry) {
@@ -178,6 +187,9 @@ function beginEdit(entry?: Entry) {
     editingNearIsle.value = !!entry && nearIsleEntryId.value === entry.id;
     nearIsleSnapshot.value = editingNearIsle.value;
     actionError.value = '';
+    message.value = '';
+    undo.value = null;
+    resetContentScroll();
   });
 }
 function cancelEdit() {
@@ -268,6 +280,9 @@ async function performUndo() {
 function startOrder() {
   orderDraft.value = sortEntries(active.value, now.value);
   expanded.value = null;
+  message.value = '';
+  undo.value = null;
+  resetContentScroll();
 }
 function moveOrder(id: string, delta: number) {
   const list = orderDraft.value;
@@ -441,7 +456,7 @@ onBeforeUnmount(() => {
         </button>
       </nav>
     </aside>
-    <main class="main-content">
+    <main ref="mainContent" class="main-content">
       <div v-if="error" class="error-notice" role="alert">
         <strong>{{ t('common.loadError') }}</strong>
         <p>{{ error }}</p>

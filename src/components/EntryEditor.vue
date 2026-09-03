@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { DisplayUnit, Entry } from '../types/entry';
-import { effectiveTime, effectiveDateIso, formatEntryText, isValidDate } from '../utils/entries';
+import { formatEntryScheduleMeta, formatEntryText, isValidDate } from '../utils/entries';
 import DateTimePicker from './DateTimePicker.vue';
 import EntryTypeSymbol from './EntryTypeSymbol.vue';
 import SegmentedControl from './SegmentedControl.vue';
@@ -26,6 +26,9 @@ const form = ref<HTMLFormElement>();
 const calendarOpen = ref(!draft.value.date);
 const validation = ref('');
 const preview = computed(() => formatEntryText(draft.value, props.now, t));
+const previewMeta = computed(() =>
+  isValidDate(draft.value.date) ? formatEntryScheduleMeta(draft.value, props.now, t) : '',
+);
 const types = computed(() => [
   { value: 'countdown', label: t('config.typeCountdown') },
   { value: 'elapsed', label: t('config.typeElapsed') },
@@ -163,13 +166,7 @@ defineExpose({ submit: () => form.value?.requestSubmit() });
           <strong>{{ draft.name || t('config.previewName') }}</strong
           ><span
             >{{ preview || t('config.previewDays')
-            }}<template v-if="isValidDate(draft.date)">
-              <template v-if="draft.repeat && draft.entryType === 'countdown'">
-                · {{ t(`config.repeat.${draft.repeat}`) }} ·
-                {{ t('config.nextOccurrence') }} </template
-              ><template v-else> · </template> {{ effectiveDateIso(draft, now)
-              }}<template v-if="draft.time"> {{ effectiveTime(draft, now) }}</template></template
-            ></span
+            }}<template v-if="previewMeta"> · {{ previewMeta }}</template></span
           >
         </div>
       </div>

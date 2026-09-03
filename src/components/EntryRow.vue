@@ -58,7 +58,8 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
       <span class="entry-row__body">
         <span class="entry-row__title"
           >{{ entry.name
-          }}<span v-if="entry.pinned" class="pin" :aria-label="t('config.pinnedTag')">·</span
+          }}<span v-if="entry.pinned" class="pin" :aria-label="t('config.pinnedTag')"
+            ><InterfaceSymbol name="pin" /></span
           ><span v-if="nearIsle" class="near-isle-tag">{{ t('config.nearIsleTag') }}</span></span
         >
         <span class="entry-row__meta">
@@ -148,9 +149,15 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
   line-height: 1.5;
 }
 .pin {
+  display: inline-flex;
+  align-items: center;
   color: var(--ts-blue);
   margin-left: 6px;
-  font-size: 17px;
+  vertical-align: -1px;
+}
+.pin svg {
+  width: 11px;
+  height: 11px;
 }
 .near-isle-tag {
   margin-left: 7px;
