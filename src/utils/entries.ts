@@ -204,6 +204,15 @@ export function formatCompactEntryMeta(entry: Entry, nowMs: number, t: Translate
   return entry.time ? `${dateText} · ${effectiveTime(entry, nowMs)}` : dateText;
 }
 
+export function formatEntryScheduleMeta(entry: Entry, nowMs: number, t: Translate): string {
+  const date = effectiveDateIso(entry, nowMs);
+  const occurrence =
+    entry.repeat && entry.entryType === 'countdown'
+      ? `${t(`config.repeat.${entry.repeat}`)} · ${t('config.nextOccurrence')} ${date}`
+      : date;
+  return entry.time ? `${occurrence} · ${effectiveTime(entry, nowMs)}` : occurrence;
+}
+
 function timedText(entry: Entry, nowMs: number, t: Translate): string {
   const diff = effectiveDeadline(entry, nowMs).getTime() - nowMs;
   const abs = Math.floor(Math.abs(diff) / 60_000);

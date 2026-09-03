@@ -3,11 +3,10 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Entry } from '../types/entry';
 import {
-  effectiveDateIso,
-  effectiveTime,
   entryProgress,
   formatCompactEntryMeta,
   formatCompactEntryText,
+  formatEntryScheduleMeta,
   formatEntryText,
   isExpiredCountdown,
 } from '../utils/entries';
@@ -17,12 +16,22 @@ const { t } = useI18n();
 const progress = computed(() => entryProgress(props.entry, props.now));
 const dot = computed(() => {
   const angle = ((135 + (progress.value?.progress ?? 0) * 270) * Math.PI) / 180;
-  return { x: 60 + 52 * Math.cos(angle), y: 60 + 52 * Math.sin(angle) };
+  return { x: 70 + 55 * Math.cos(angle), y: 65 + 55 * Math.sin(angle) };
 });
 const text = computed(() => formatEntryText(props.entry, props.now, t));
 const compactText = computed(() => formatCompactEntryText(props.entry, props.now, t));
 const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now, t));
+const fullMeta = computed(() => formatEntryScheduleMeta(props.entry, props.now, t));
 const expired = computed(() => isExpiredCountdown(props.entry, props.now));
+const arcValueParts = computed(() => {
+  const value = compactText.value.trim();
+  const spaced = value.match(/^(\S+)\s+(.+)$/);
+  if (spaced) return { primary: spaced[1], secondary: spaced[2] };
+  const compact = value.match(/^(.+?\D)(\d.+)$/u);
+  return compact
+    ? { primary: compact[1], secondary: compact[2] }
+    : { primary: value, secondary: '' };
+});
 </script>
 
 <template>
@@ -31,7 +40,7 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
     :class="{ compact, elapsed: entry.entryType === 'elapsed', expired }"
     type="button"
     :data-entry-id="entry.id"
-    :aria-label="compact ? `${entry.name} — ${text}` : undefined"
+    :aria-label="`${entry.name} — ${text}`"
     :title="compact ? `${entry.name} · ${compactMeta} · ${text}` : undefined"
     @click="$emit('edit', entry)"
   >
@@ -39,15 +48,8 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
       <span class="feature__eyebrow">{{ t('config.featuredLabel') }}</span>
       <strong class="feature__name">{{ entry.name }}</strong>
       <span class="feature__date">
-        <template v-if="compact">{{ compactMeta }}</template>
-        <template v-else
-          ><template v-if="entry.repeat && entry.entryType === 'countdown'"
-            >{{ t(`config.repeat.${entry.repeat}`) }} · {{ t('config.nextOccurrence') }} </template
-          >{{ effectiveDateIso(entry, now)
-          }}<template v-if="entry.time"> · {{ effectiveTime(entry, now) }}</template></template
-        >
+        {{ compact ? compactMeta : fullMeta }}
       </span>
-      <span v-if="!compact" class="feature__meaning">{{ text }}</span>
     </div>
     <template v-if="compact">
       <strong class="feature__value">{{ compactText }}</strong>
@@ -59,18 +61,20 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
       </span>
     </template>
     <div v-else-if="progress" class="arc" aria-hidden="true">
-      <svg viewBox="0 0 120 118" fill="none">
-        <path class="arc__track" d="M23.23 96.77 A52 52 0 1 1 96.77 96.77" />
+      <svg viewBox="0 0 144 134" fill="none">
+        <path class="arc__track" d="M31.1 103.9 A55 55 0 1 1 108.9 103.9" />
         <path
           class="arc__fill"
-          d="M23.23 96.77 A52 52 0 1 1 96.77 96.77"
+          d="M31.1 103.9 A55 55 0 1 1 108.9 103.9"
           pathLength="100"
           :stroke-dasharray="`${progress.progress * 100} 100`"
         />
         <circle :cx="dot.x" :cy="dot.y" r="3.2" fill="var(--ts-blue)" />
       </svg>
-      <div class="arc__number" :class="{ 'arc__number--long': entry.time }">
-        <template v-if="entry.time">{{ compactText }}</template
+      <div class="arc__number" :class="{ 'arc__number--timed': entry.time }">
+        <template v-if="entry.time"
+          ><span>{{ arcValueParts.primary }}</span
+          ><small v-if="arcValueParts.secondary">{{ arcValueParts.secondary }}</small></template
         ><template v-else
           >{{ progress.days }}<small>{{ t('config.unit.day') }}</small></template
         >
@@ -89,11 +93,12 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 .feature {
   position: relative;
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 144px;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 20px 26px;
+  gap: 22px;
+  min-height: 176px;
+  padding: 20px 22px 18px 26px;
   border: 1px solid var(--ts-line);
   border-radius: 14px 14px 30px 14px;
   background: var(--ts-focus);
@@ -116,6 +121,7 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 }
 .feature__copy {
   position: relative;
+  z-index: 1;
   min-width: 0;
   display: grid;
   gap: 7px;
@@ -131,15 +137,12 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.feature__date,
-.feature__meaning {
+.feature__date {
   color: var(--ts-text-2);
   font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
-.feature__meaning {
-  color: var(--ts-blue);
-}
-.feature.elapsed .feature__meaning,
 .feature.elapsed .feature__standalone-value,
 .feature.elapsed .feature__value {
   color: var(--ts-teal);
@@ -151,14 +154,15 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 }
 .arc {
   position: relative;
-  width: 120px;
-  height: 125px;
-  flex: 0 0 120px;
+  z-index: 1;
+  width: 144px;
+  height: 134px;
+  justify-self: end;
   font-variant-numeric: tabular-nums;
 }
 .arc svg {
-  width: 120px;
-  height: 118px;
+  width: 144px;
+  height: 134px;
 }
 .arc__track,
 .arc__fill {
@@ -171,7 +175,7 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 }
 .arc__number {
   position: absolute;
-  top: 29px;
+  top: 31px;
   left: 0;
   width: 100%;
   text-align: center;
@@ -188,10 +192,17 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
   letter-spacing: 0;
   color: var(--ts-text-2);
 }
-.arc__number--long {
-  top: 38px;
-  font-size: 25px;
-  letter-spacing: -0.03em;
+.arc__number--timed {
+  top: 35px;
+  left: 28px;
+  width: 88px;
+  font-size: 23px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.arc__number--timed small {
+  font-size: 12px;
+  margin-top: 7px;
 }
 .arc__start,
 .arc__end {
@@ -201,13 +212,14 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
   color: var(--ts-text-2);
 }
 .arc__start {
-  left: 6px;
+  left: 9px;
 }
 .arc__end {
-  right: 6px;
+  right: 7px;
 }
 .compact {
   display: flex;
+  min-height: 0;
   align-items: center;
   padding: 12px 14px 18px;
   gap: 10px;
@@ -280,6 +292,18 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 @media (prefers-contrast: more), (forced-colors: active) {
   .feature::before {
     display: none;
+  }
+}
+@media (max-width: 740px) {
+  .feature:not(.compact) {
+    grid-template-columns: minmax(0, 1fr) 126px;
+    gap: 14px;
+    padding-inline: 20px 14px;
+  }
+  .feature:not(.compact) .arc {
+    transform: scale(0.88);
+    transform-origin: right center;
+    margin-left: -18px;
   }
 }
 </style>

@@ -3,10 +3,9 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { Entry } from '../types/entry';
 import {
-  effectiveTime,
-  effectiveDateIso,
   formatCompactEntryMeta,
   formatCompactEntryText,
+  formatEntryScheduleMeta,
   formatEntryText,
   isExpiredCountdown,
 } from '../utils/entries';
@@ -33,6 +32,12 @@ const { t } = useI18n();
 const text = computed(() => formatEntryText(props.entry, props.now, t));
 const compactText = computed(() => formatCompactEntryText(props.entry, props.now, t));
 const compactMeta = computed(() => formatCompactEntryMeta(props.entry, props.now, t));
+const fullMeta = computed(
+  () =>
+    `${t(
+      props.entry.entryType === 'countdown' ? 'config.typeCountdown' : 'config.typeElapsed',
+    )} · ${formatEntryScheduleMeta(props.entry, props.now, t)}`,
+);
 const expired = computed(() => isExpiredCountdown(props.entry, props.now));
 </script>
 
@@ -57,17 +62,7 @@ const expired = computed(() => isExpiredCountdown(props.entry, props.now));
           ><span v-if="nearIsle" class="near-isle-tag">{{ t('config.nearIsleTag') }}</span></span
         >
         <span class="entry-row__meta">
-          <template v-if="compact">{{ compactMeta }}</template>
-          <template v-else
-            >{{
-              t(entry.entryType === 'countdown' ? 'config.typeCountdown' : 'config.typeElapsed')
-            }}
-            <template v-if="entry.repeat && entry.entryType === 'countdown'">
-              · {{ t(`config.repeat.${entry.repeat}`) }} ·
-              {{ t('config.nextOccurrence') }} </template
-            ><template v-else> · </template> {{ effectiveDateIso(entry, now)
-            }}<template v-if="entry.time"> {{ effectiveTime(entry, now) }}</template></template
-          >
+          {{ compact ? compactMeta : fullMeta }}
         </span>
       </span>
       <span class="entry-row__value" :class="{ expired, elapsed: entry.entryType === 'elapsed' }">
