@@ -7,6 +7,7 @@ import type { AppSettings, ThemeMode } from '../api/settings';
 import SegmentedControl from './SegmentedControl.vue';
 import ToggleSwitch from './ToggleSwitch.vue';
 const { t } = useI18n();
+const iconPlatform = /Mac/i.test(navigator.platform) ? 'mac' : 'windows';
 const { settings, loaded, busy, error, persist, retry } = useSettings();
 const actionError = ref('');
 const message = ref('');
@@ -89,6 +90,14 @@ async function toggleLaunch(enabled: boolean) {
           :model-value="launchEnabled"
           :disabled="!launchKnown"
           @update:model-value="toggleLaunch"
+      /></label>
+      <label class="settings-row"
+        ><span
+          ><strong>{{ t(`settings.hideAppIcon.${iconPlatform}`) }}</strong
+          ><small>{{ t(`settings.hideAppIconDesc.${iconPlatform}`) }}</small></span
+        ><ToggleSwitch
+          :model-value="settings.hideAppIcon"
+          @update:model-value="save({ hideAppIcon: $event })"
       /></label>
       <label class="settings-row"
         ><span

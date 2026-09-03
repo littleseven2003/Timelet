@@ -19,6 +19,7 @@ pub fn run() {
             settings::init(app.handle())?;
             storage::init(app.handle())?;
             tray::init(app.handle())?;
+            settings::apply_startup_visibility(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

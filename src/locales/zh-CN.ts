@@ -218,6 +218,11 @@ export default {
     launchAtLogin: '开机自启',
     launchAtLoginDesc: '登录系统时自动启动 Timelet',
     launchError: '开机自启设置失败，请重试',
+    hideAppIcon: { mac: '隐藏 Dock 图标', windows: '隐藏任务栏图标' },
+    hideAppIconDesc: {
+      mac: '仅保留菜单栏入口，点击即可打开面板或主窗口',
+      windows: '仅保留系统托盘入口，不在任务栏显示窗口按钮',
+    },
     showExpired: '显示已过期条目',
     showExpiredDesc: '关闭后，已过期的倒计时条目不再出现在面板中',
     panelLimit: '面板条目数',

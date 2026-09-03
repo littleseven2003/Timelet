@@ -122,6 +122,11 @@ fn open_main_with(app: &AppHandle, action: Option<EntryAction>) {
     .title("时屿 · Timelet")
     .min_inner_size(700.0, 520.0);
 
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.skip_taskbar(crate::settings::hide_app_icon(app));
+    }
+
     // 恢复用户上次调整过的窗口大小与位置
     if let Some(bounds) = crate::settings::load_window_bounds(app) {
         builder = builder

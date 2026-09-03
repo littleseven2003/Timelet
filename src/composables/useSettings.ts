@@ -4,6 +4,7 @@ import { getSettings, saveSettings, type AppSettings } from '../api/settings';
 
 const settings = ref<AppSettings>({
   launchAtLogin: false,
+  hideAppIcon: false,
   showExpired: true,
   theme: 'system',
   panelLimit: 6,

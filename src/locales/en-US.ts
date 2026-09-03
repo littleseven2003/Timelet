@@ -220,6 +220,11 @@ export default {
     launchAtLogin: 'Launch at login',
     launchAtLoginDesc: 'Start Timelet automatically when you log in',
     launchError: 'Failed to update launch setting, please retry',
+    hideAppIcon: { mac: 'Hide Dock icon', windows: 'Hide taskbar icon' },
+    hideAppIconDesc: {
+      mac: 'Keep the menu bar icon to open the panel or main window',
+      windows: 'Keep the system tray icon and hide the window button from the taskbar',
+    },
     showExpired: 'Show expired entries',
     showExpiredDesc: 'Hide expired countdown entries from the panel when off',
     panelLimit: 'Panel entries',
