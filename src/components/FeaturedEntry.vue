@@ -193,16 +193,27 @@ const arcValueParts = computed(() => {
   color: var(--ts-text-2);
 }
 .arc__number--timed {
-  top: 35px;
-  left: 28px;
+  top: 24px;
+  left: 26px;
   width: 88px;
+  height: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font-size: 23px;
+  line-height: 1;
   letter-spacing: -0.02em;
   white-space: nowrap;
 }
+.arc__number--timed > span {
+  line-height: 1;
+}
 .arc__number--timed small {
   font-size: 12px;
-  margin-top: 7px;
+  line-height: 1;
+  margin-top: 0;
 }
 .arc__start,
 .arc__end {

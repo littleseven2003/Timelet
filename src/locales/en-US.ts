@@ -81,6 +81,7 @@ export default {
         month: '{n}mo',
         year: '{n}yr',
         daysHours: '{d}d {h}h',
+        hours: '{h}h',
         hoursMinutes: '{h}h {m}m',
         minutes: '{m}m',
       },

@@ -148,6 +148,7 @@ function compactTimedDuration(diff: number, t: Translate): string {
   const hours = Math.floor((minutesTotal % 1440) / 60);
   const minutes = minutesTotal % 60;
   if (days > 0) return t('panel.compact.duration.daysHours', { d: days, h: hours });
+  if (hours > 0 && minutes === 0) return t('panel.compact.duration.hours', { h: hours });
   if (hours > 0) return t('panel.compact.duration.hoursMinutes', { h: hours, m: minutes });
   if (minutes > 0) return t('panel.compact.duration.minutes', { m: minutes });
   return '';

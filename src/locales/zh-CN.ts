@@ -81,6 +81,7 @@ export default {
         month: '{n}个月',
         year: '{n}年',
         daysHours: '{d}天{h}时',
+        hours: '{h}时',
         hoursMinutes: '{h}时{m}分',
         minutes: '{m}分',
       },

@@ -38,6 +38,7 @@ const compactMessages = {
   'panel.compact.duration.month': '{n}个月',
   'panel.compact.duration.year': '{n}年',
   'panel.compact.duration.daysHours': '{d}天{h}时',
+  'panel.compact.duration.hours': '{h}时',
   'panel.compact.duration.hoursMinutes': '{h}时{m}分',
   'panel.compact.duration.minutes': '{m}分',
 };
@@ -133,6 +134,14 @@ test('快捷面板使用短时间值与精简日期，方向信息不丢失', ()
   const daily = entry({ date: '2026-09-01', time: '17:00', repeat: 'daily' });
   assert.equal(u.formatCompactEntryText(daily, now, compactTranslate), '7时30分');
   assert.equal(u.formatCompactEntryMeta(daily, now, compactTranslate), '每天 · 17:00');
+  assert.equal(
+    u.formatCompactEntryText(daily, new Date('2026-09-01T16:00:00').getTime(), compactTranslate),
+    '1时',
+  );
+  assert.equal(
+    u.formatCompactEntryText(daily, new Date('2026-09-01T16:59:00').getTime(), compactTranslate),
+    '1分',
+  );
 
   const once = entry({ date: '2026-09-12', time: '08:30' });
   assert.equal(u.formatCompactEntryMeta(once, now, compactTranslate), '9月12日 · 08:30');
