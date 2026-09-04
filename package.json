@@ -9,6 +9,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "bundle:mac": "tauri build --bundles app,dmg --no-sign -- --locked",
+    "bundle:windows": "tauri build --target x86_64-pc-windows-msvc --bundles nsis --no-sign -- --locked",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "node --test src/utils/*.test.mjs"

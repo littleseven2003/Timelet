@@ -642,6 +642,21 @@
 | M4 双平台构建   | macOS 本地打包验证；Windows 打包方案确定（本机或后续 CI）                                                             | 两个平台均产出可安装包          |
 | M5 发布准备     | README、版本号 v0.1、后续 GitHub Releases 与远程构建流程规划（暂不实施）                                              | 具备发布条件，发布动作另行确认  |
 
+### 11.1 M4 打包约定（2026-09-04）
+
+共用配置为 `src-tauri/tauri.conf.json`，平台配置由同目录的 `tauri.macos.conf.json`、`tauri.windows.conf.json` 自动合并。不混用两端系统图标资源，不改变应用标识或本地数据位置。
+
+| 平台 | 当前打包目标 | 安装与运行约定 |
+| --- | --- | --- |
+| macOS | 本机构架的 Release APP + DMG；首批在 Apple Silicon 构建 | 最低系统声明 12.0；系统分层图标与 ICNS 回退均保留。最低版本声明不等于已在 macOS 12 实测，Intel/Universal 包须另行构建验证 |
+| Windows 10/11 | x64 Release NSIS 安装程序 | 简体中文安装界面，安装到当前用户范围，沿用现有 ICO；缺少 WebView2 时联网下载引导程序并安装，不能承诺离线首次安装可用 |
+
+`pnpm bundle:mac` 在 macOS 执行，`pnpm bundle:windows` 在配置好 MSVC 的 Windows 执行；构建使用已提交的 Cargo 锁文件。前端依赖安装使用 `pnpm install --frozen-lockfile`。不因命令存在而宣称目标平台已验证。
+
+本批不配置 Developer ID/Windows 发布证书或公证服务；macOS 二进制可能含本地运行所需的临时签名，不视为已完成分发签名。安装包仍为本地验证产物，不创建 Release、发布标签或远程构建工作流。Windows 安装、任务栏显隐、自启、托盘与数据重启须在真实系统环境中验收；M3 剩余待办不随打包自动通过。
+
+依据：[Tauri macOS 打包](https://v2.tauri.app/distribute/macos-application-bundle/)、[Windows 安装包与 WebView2](https://v2.tauri.app/distribute/windows-installer/)。
+
 ## 12. 风险与注意事项
 
 - **Windows 弹窗定位**：任务栏可能在屏幕四边，托盘图标坐标获取方式与 macOS 不同，M1 中预留手动测试项。
