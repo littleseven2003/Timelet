@@ -653,9 +653,9 @@
 
 `pnpm bundle:mac` 在 macOS 执行，`pnpm bundle:windows` 在配置好 MSVC 的 Windows 执行；构建使用已提交的 Cargo 锁文件。前端依赖安装使用 `pnpm install --frozen-lockfile`。不因命令存在而宣称目标平台已验证。
 
-本批不配置 Developer ID/Windows 发布证书或公证服务；macOS 二进制可能含本地运行所需的临时签名，不视为已完成分发签名。安装包仍为本地验证产物，不创建 Release、发布标签或远程构建工作流。Windows 安装、任务栏显隐、自启、托盘与数据重启须在真实系统环境中验收；M3 剩余待办不随打包自动通过。
+本批不配置 Developer ID/Windows 发布证书或公证服务；macOS 二进制可能含本地运行所需的临时签名，不视为已完成分发签名。安装包用于验证，不创建 Release 或发布标签。经确认新增 Windows x64 远程构建工作流：功能分支代码或构建配置推送触发，合入默认分支后支持手动触发；仅授予源码读取权限，执行静态检查、业务回归及 NSIS 打包，安装包与校验和作为构建产物保留 7 天，不自动合并。Windows 安装、任务栏显隐、自启、托盘与数据重启须在真实系统环境中验收；M3 剩余待办不随打包自动通过。
 
-首批结果：macOS arm64 Release APP/DMG 已生成，包信息、镜像完整性及隔离副本的保存/重启、Dock 设置恢复通过。现有 Windows 11 虚拟机为 ARM64 且未发现构建工具链；Windows x64 安装包尚未生成，远程构建方案待确认，M4 仍未完成。详细测试范围见 [验收记录](VALIDATION.md)。
+首批结果：macOS arm64 Release APP/DMG 已生成，包信息、镜像完整性及隔离副本的保存/重启、Dock 设置恢复通过。现有 Windows 11 虚拟机为 ARM64 且未发现构建工具链；Windows x64 远程构建方案已确认并配置，首次执行结果待记录，M4 仍未完成。详细测试范围见 [验收记录](VALIDATION.md)。
 
 依据：[Tauri macOS 打包](https://v2.tauri.app/distribute/macos-application-bundle/)、[Windows 安装包与 WebView2](https://v2.tauri.app/distribute/windows-installer/)。
 
