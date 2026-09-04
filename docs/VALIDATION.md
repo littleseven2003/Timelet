@@ -6,7 +6,7 @@
 
 最新决定：2026-09-04，项目所有者同意合并 M3 开发成果；下列未完成检查保留为后续验收，不标记全部通过、不打标签、不发布。本次范围调整只适用于本轮开发成果整合，不自动适用于后续功能分支。
 
-后续进展：M3 已以 `8706ddf` 合入主干并同步公开源码；M4 首批在 `feat/platform-build` 实施，配置提交为 `f2fd197`。本地 Release 结果见下文，Windows 构建与安装仍未完成。
+后续进展：M3 已以 `8706ddf` 合入主干并同步公开源码；M4 首批在 `feat/platform-build` 实施，配置提交为 `f2fd197`。本地 Release 与 Windows x64 远程构建结果见下文；Windows 安装和桌面交互仍未验收。
 
 ## 范围与结论
 
@@ -20,7 +20,7 @@
 
 | 项目 | 结果与边界 |
 | --- | --- |
-| 平台配置 | 共用配置分别合并 macOS/Windows 配置后通过本地 Tauri 配置结构校验；macOS 实际构建确认加载平台设置，Windows 尚未通过原生构建验证 |
+| 平台配置 | 共用配置分别合并 macOS/Windows 配置后通过本地 Tauri 配置结构校验；macOS 实际构建确认加载平台设置，Windows 后续已通过 x64 构建机验证，见下方远程结果 |
 | 工程检查 | lint、10 项前端业务测试、类型与前端构建、Rust 格式、12 项 Rust 测试及 Clippy 均通过，lint/Clippy 无告警；依赖锁文件未变更 |
 | macOS Release | `pnpm bundle:mac` 生成 APP 与 DMG；最低系统声明及 Mach-O 的最低系统字段均为 12.0，架构为 arm64，不是 Universal 包 |
 | 产品信息与图标 | 包标识为 `com.littleseven.timelet`，版本 0.1.0；`CFBundleIconName=Timelet`、ICNS 回退及 Assets.car 均存在，图标源文件未改动 |
@@ -34,11 +34,23 @@
 
 首次 DMG 打包在沙盒中失败，同一配置在正常本机环境重试成功，没有因此更改应用逻辑或放宽系统安全设置。Release 检查只覆盖上表范围，不把 M3 的完整键盘、缩放、多屏、系统变化及全部增删改组合自动标为通过。macOS 12、Intel Mac、原生 Windows x64 均未实测，本批仍不满足 M4 全部交付条件，不合并、不发布。
 
-Windows 后续方案已确认：在 GitHub Windows x64 构建机生成安装包，本机 Windows 11 ARM 进行 x64 仿真交互测试；两类证据分别记录。仅有构建成功不能替代原生 x64 桌面验收。已新增远程构建工作流，固定官方动作提交，最小读取权限，产物保留 7 天；首次运行结果待验证。另将托盘构建器改为平台条件遮蔽声明，消除 Windows 下无用的可变变量；macOS 格式与 Clippy 复核通过。
+Windows 后续方案已确认：在 GitHub Windows x64 构建机生成安装包，本机 Windows 11 ARM 进行 x64 仿真交互测试；两类证据分别记录。仅有构建成功不能替代原生 x64 桌面验收。已新增远程构建工作流，固定官方动作提交，最小读取权限，产物保留 7 天；实际运行结果见下文。另将托盘构建器改为平台条件遮蔽声明，消除 Windows 下无用的可变变量；macOS 格式与 Clippy 复核通过。
 
 Windows 首次远程运行（`90e2c6d`，运行 `33848938601`）：前端静态检查、10 项业务回归、类型与构建、Rust 格式通过；Cargo 测试尚未执行，编译准备因清单中的 `macos-private-api` 与 Windows 配置不一致而失败。工作流补充 Tauri 调试编译步骤，由官方构建入口同步当前平台特性后再执行 Cargo 测试和 Clippy；调整仅发生在临时构建机检出的清单，不改变已提交的依赖版本或跳过检查。
 
 第二次远程运行（`526f066`，运行 `33859676382`）在进入编译前发现 Windows 的脚本参数转发未保留 Cargo 参数分隔符。将完整命令固化为 `pnpm check:desktop`，与正式打包入口采用相同方式，保留 `--locked`；后续运行仍必须重新经过全部检查。
+
+### Windows x64 远程构建结果
+
+验证提交为 `84c51d0`，[运行 33860006642](https://github.com/littleseven2003/Timelet/actions/runs/33860006642) 全部成功；构建机为 Windows Server 2022 x64，Rust 1.98.1，pnpm 11.9.0，Node.js 24。后续仅文档收尾不改变此次已验证源码与构建配置。
+
+- 前端 lint、10 项业务回归、类型与生产构建通过；Rust 格式、调试编译、12 项业务回归、Clippy（`-D warnings`）全部通过。
+- `pnpm bundle:windows` 为 `x86_64-pc-windows-msvc` 生成 Release 应用并完成 NSIS 打包；没有跳过测试或放宽告警门槛，没有引入项目依赖，已提交的锁文件未改变。
+- 产物 `Timelet_0.1.0_x64-setup.exe` 为 2,265,082 字节，下载到本地后与工作流生成的 SHA-256 一致：`c8b27f5bb67716675e437ceac7159edf26b6b2123cbd9d534eedd48038c4a730`。
+- 产物编号 `9932046631`，内含安装程序与 `SHA256SUMS.txt`，于 2026-09-11 09:57 UTC 到期。项目本地副本位于忽略的 `src-tauri/target/ci-windows/84c51d0/`，不纳入源码历史。
+- 本机 `pnpm check:desktop` 亦通过；新增脚本完整保留 Cargo 参数分隔符，未生成额外应用包。
+
+边界：NSIS 打包成功不等于已经安装并启动。Windows 11 ARM 虚拟机的桌面连接发生异常长等待，未进入安装或应用交互，CLI 确认虚拟机仍挂起；未改动其中的应用、数据、自启或工具链。Windows ARM 仿真安装和原生 Windows x64 桌面验收均保留待办。此前 macOS Release 证据仍以首批配置基线为准，不把本次构建自动计为所有平台交互通过。分支不合并、不打标签、不创建 Release，版本仍为 `0.1.0`。
 
 ## 2026-09-03 图标显隐与原生回归
 

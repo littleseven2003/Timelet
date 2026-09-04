@@ -40,7 +40,7 @@ macOS 需 Xcode Command Line Tools；Windows 需 MSVC C++ 构建工具、Windows
 
 macOS 命令按本机构架构建，当前 Apple Silicon 产物不是 Intel/Universal 包。最低系统声明为 macOS 12.0，仍需对应旧系统实测。打包命令使用 Cargo 锁文件，并明确跳过分发签名；本地运行的临时签名不等于 Developer ID 签名或公证，不能承诺下载到其他设备后可直接通过系统安全检查。
 
-Windows 安装界面为简体中文，按当前用户安装。缺少 WebView2 时需要联网下载并安装运行时；Windows ARM 上的 x64 仿真测试与原生 x64 验收分别记录。构建命令与配置已准备，不表示已经产出或验收 Windows 安装包。
+Windows 安装界面为简体中文，按当前用户安装。缺少 WebView2 时需要联网下载并安装运行时；Windows ARM 上的 x64 仿真测试与原生 x64 验收分别记录。Windows x64 安装包已通过远程构建；安装、任务栏显隐、自启与重启等桌面行为仍待验收。
 
 公开仓库尚未发布正式安装包。Windows 构建工作流在 `feat/platform-build` 的代码或构建配置推送时触发，使用 Windows x64 构建机、Node.js 24、pnpm 11.9.0 和 Rust stable，先检查再生成 NSIS 安装包。工作流合入默认分支后可手动触发。
 
