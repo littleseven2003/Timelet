@@ -1,16 +1,14 @@
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Mutex;
+use crate::persistence::{DataFile, Document};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 // 数据文件结构版本，字段演进时递增并编写迁移逻辑
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 const ENTRIES_FILE: &str = "entries.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Entry {
     pub id: String,
     pub name: String,
@@ -18,59 +16,203 @@ pub struct Entry {
     pub entry_type: String,
     // ISO 日期（YYYY-MM-DD）
     pub date: String,
-    pub color: String,
+    // 可选时刻（HH:mm），缺失表示纯日期条目
+    pub time: Option<String>,
+    // 循环规则（daily 每天 / workday 工作日），仅带时刻的条目生效
+    pub repeat: Option<String>,
+    // 展示单位（day/week/month/year），缺失按天
+    pub display_unit: Option<String>,
+    // 选填备注，面板悬停时展示
+    pub note: Option<String>,
     pub pinned: bool,
+    // 手动排序值（拖拽后生成），缺失表示按自动规则排序
+    pub sort_index: Option<i64>,
+    // 归档后离开活动视图，可恢复；缺失表示活动条目
+    pub archived: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Store {
     schema_version: u32,
+    #[serde(
+        rename = "nearIsleEntryId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    near_isle_entry_id: Option<String>,
     entries: Vec<Entry>,
 }
 
-// 全局条目状态：启动时加载，变更后立即落盘
-pub struct EntryStore(Mutex<Vec<Entry>>);
+impl Default for Store {
+    fn default() -> Self {
+        Self {
+            schema_version: SCHEMA_VERSION,
+            near_isle_entry_id: None,
+            entries: Vec::new(),
+        }
+    }
+}
+
+impl Document for Store {
+    fn validate(&self) -> Result<(), String> {
+        if self.schema_version != SCHEMA_VERSION {
+            return Err(format!(
+                "不支持的数据版本 {}，请使用兼容版本打开",
+                self.schema_version
+            ));
+        }
+        let mut ids = std::collections::HashSet::new();
+        for entry in &self.entries {
+            if entry.id.is_empty() || !ids.insert(&entry.id) {
+                return Err("条目标识为空或重复".into());
+            }
+            if !valid_date(&entry.date)
+                || !matches!(entry.entry_type.as_str(), "countdown" | "elapsed")
+                || entry.time.as_deref().is_some_and(|time| !valid_time(time))
+                || entry
+                    .repeat
+                    .as_deref()
+                    .is_some_and(|repeat| !matches!(repeat, "daily" | "workday"))
+                || (entry.repeat.is_some()
+                    && (entry.entry_type != "countdown" || entry.time.is_none()))
+            {
+                return Err(format!(
+                    "条目「{}」的日期、时刻、类型或发生频率无法识别",
+                    entry.name
+                ));
+            }
+        }
+        if self.near_isle_entry_id.as_ref().is_some_and(|id| {
+            !self
+                .entries
+                .iter()
+                .any(|entry| entry.id == *id && entry.archived != Some(true))
+        }) {
+            return Err("近屿条目不存在或已归档".into());
+        }
+        Ok(())
+    }
+}
+
+fn valid_date(date: &str) -> bool {
+    if date.len() != 10
+        || !date.bytes().enumerate().all(|(i, b)| {
+            if i == 4 || i == 7 {
+                b == b'-'
+            } else {
+                b.is_ascii_digit()
+            }
+        })
+    {
+        return false;
+    }
+    let parts: Vec<_> = date.split('-').map(str::parse::<u32>).collect();
+    let [Ok(year), Ok(month), Ok(day)] = parts.as_slice() else {
+        return false;
+    };
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let limit = match month {
+        2 => {
+            if leap {
+                29
+            } else {
+                28
+            }
+        }
+        4 | 6 | 9 | 11 => 30,
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        _ => return false,
+    };
+    *year > 0 && *day >= 1 && *day <= limit
+}
+
+fn valid_time(time: &str) -> bool {
+    if time.len() != 5 || time.as_bytes()[2] != b':' {
+        return false;
+    }
+    let parts: Vec<_> = time.split(':').map(str::parse::<u32>).collect();
+    matches!(parts.as_slice(), [Ok(hour), Ok(minute)] if *hour < 24 && *minute < 60)
+}
+
+impl Store {
+    fn upsert(
+        &mut self,
+        entry: Entry,
+        expected: Option<&str>,
+        near_isle: Option<bool>,
+    ) -> Result<(), String> {
+        if near_isle == Some(true) && entry.archived == Some(true) {
+            return Err("归档条目不能设为近屿".into());
+        }
+        let id = entry.id.clone();
+        match self.entries.iter_mut().find(|e| e.id == entry.id) {
+            Some(existing) => {
+                if expected != Some(existing.updated_at.as_str()) {
+                    return Err("条目已在另一窗口变化，请保留草稿并重新打开最新条目".into());
+                }
+                *existing = entry;
+            }
+            None if expected.is_some() => return Err("条目已被删除，未重新创建旧记录".into()),
+            None => self.entries.push(entry),
+        }
+        if self.near_isle_entry_id.as_deref() == Some(id.as_str())
+            && self
+                .entries
+                .iter()
+                .find(|entry| entry.id == id)
+                .is_some_and(|entry| entry.archived == Some(true))
+        {
+            self.near_isle_entry_id = None;
+        }
+        match near_isle {
+            Some(true) => self.near_isle_entry_id = Some(id),
+            Some(false) if self.near_isle_entry_id.as_deref() == Some(id.as_str()) => {
+                self.near_isle_entry_id = None;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn set_near_isle(&mut self, id: Option<String>) -> Result<(), String> {
+        if id.as_ref().is_some_and(|target| {
+            !self
+                .entries
+                .iter()
+                .any(|entry| entry.id == *target && entry.archived != Some(true))
+        }) {
+            return Err("只能将未归档的现有条目设为近屿".into());
+        }
+        self.near_isle_entry_id = id;
+        Ok(())
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntrySnapshot {
+    entries: Vec<Entry>,
+    near_isle_entry_id: Option<String>,
+}
+
+pub struct EntryStore(DataFile<Store>);
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
-    let entries = load(app).unwrap_or_default();
-    app.manage(EntryStore(Mutex::new(entries)));
-    Ok(())
-}
-
-fn storage_path(app: &AppHandle) -> PathBuf {
-    let mut path = app.path().app_data_dir().expect("无法定位应用数据目录");
-    fs::create_dir_all(&path).ok();
-    path.push(ENTRIES_FILE);
-    path
-}
-
-fn load(app: &AppHandle) -> Option<Vec<Entry>> {
-    let text = fs::read_to_string(storage_path(app)).ok()?;
-    let store: Store = serde_json::from_str(&text).ok()?;
-    // 后续版本按 schema_version 在此编写迁移
-    Some(store.entries)
-}
-
-// 写临时文件后原子替换，避免写入中断导致数据损坏
-fn save(app: &AppHandle, entries: &[Entry]) -> Result<(), String> {
-    let store = Store {
-        schema_version: SCHEMA_VERSION,
-        entries: entries.to_vec(),
-    };
-    let text = serde_json::to_string_pretty(&store).map_err(|e| e.to_string())?;
-
-    let path = storage_path(app);
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, text).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+    let path = app.path().app_data_dir()?.join(ENTRIES_FILE);
+    app.manage(EntryStore(DataFile::new(path)));
     Ok(())
 }
 
 #[tauri::command]
-pub fn entry_list(state: State<'_, EntryStore>) -> Vec<Entry> {
-    state.0.lock().unwrap().clone()
+pub fn entry_list(state: State<'_, EntryStore>) -> Result<EntrySnapshot, String> {
+    let store = state.0.read()?;
+    Ok(EntrySnapshot {
+        entries: store.entries,
+        near_isle_entry_id: store.near_isle_entry_id,
+    })
 }
 
 #[tauri::command]
@@ -78,13 +220,16 @@ pub fn entry_save(
     app: AppHandle,
     state: State<'_, EntryStore>,
     entry: Entry,
+    expected_updated_at: Option<String>,
+    near_isle: Option<bool>,
 ) -> Result<(), String> {
-    let mut entries = state.0.lock().unwrap();
-    match entries.iter_mut().find(|e| e.id == entry.id) {
-        Some(existing) => *existing = entry,
-        None => entries.push(entry),
+    if entry.name.trim().is_empty() || !matches!(entry.entry_type.as_str(), "countdown" | "elapsed")
+    {
+        return Err("请填写名称并选择有效类型".into());
     }
-    save(&app, &entries)?;
+    state
+        .0
+        .change(|store| store.upsert(entry, expected_updated_at.as_deref(), near_isle))?;
     notify_changed(&app);
     Ok(())
 }
@@ -95,14 +240,144 @@ pub fn entry_delete(
     state: State<'_, EntryStore>,
     id: String,
 ) -> Result<(), String> {
-    let mut entries = state.0.lock().unwrap();
-    entries.retain(|e| e.id != id);
-    save(&app, &entries)?;
+    state.0.change(|store| {
+        store.entries.retain(|e| e.id != id);
+        if store.near_isle_entry_id.as_deref() == Some(id.as_str()) {
+            store.near_isle_entry_id = None;
+        }
+        Ok(())
+    })?;
     notify_changed(&app);
     Ok(())
 }
 
-// 数据变更后广播事件，让隐藏中的面板窗口刷新列表
+#[tauri::command]
+pub fn entry_set_near_isle(
+    app: AppHandle,
+    state: State<'_, EntryStore>,
+    id: Option<String>,
+) -> Result<(), String> {
+    state.0.change(|store| store.set_near_isle(id))?;
+    notify_changed(&app);
+    Ok(())
+}
+
 fn notify_changed(app: &AppHandle) {
-    app.emit("entries-changed", ()).ok();
+    let _ = app.emit("entries-changed", ());
+}
+
+#[tauri::command]
+pub fn entry_reorder(
+    app: AppHandle,
+    state: State<'_, EntryStore>,
+    ids: Vec<String>,
+    reset: Option<bool>,
+) -> Result<(), String> {
+    state.0.change(|store| {
+        let active: std::collections::HashSet<_> = store
+            .entries
+            .iter()
+            .filter(|e| e.archived != Some(true))
+            .map(|e| &e.id)
+            .collect();
+        let requested: std::collections::HashSet<_> = ids.iter().collect();
+        if requested != active || ids.len() != active.len() {
+            return Err("条目已变化，请刷新完整列表后重新排序".into());
+        }
+        for (index, id) in ids.iter().enumerate() {
+            if let Some(entry) = store.entries.iter_mut().find(|e| e.id == *id) {
+                entry.sort_index = if reset.unwrap_or(false) {
+                    None
+                } else {
+                    Some(index as i64)
+                };
+            }
+        }
+        Ok(())
+    })?;
+    notify_changed(&app);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn current_schema_keeps_optional_archive_field_and_rejects_other_versions() {
+        let current = r##"{"schema_version":2,"entries":[{"id":"a","name":"生日","entryType":"countdown","date":"2026-09-01","pinned":false,"createdAt":"2026-08-01T00:00:00Z","updatedAt":"2026-08-01T00:00:00Z"}]}"##;
+        let store: Store = serde_json::from_str(current).unwrap();
+        assert!(store.validate().is_ok());
+        assert_eq!(store.entries[0].archived, None);
+        assert_eq!(store.near_isle_entry_id, None);
+        let legacy: Store =
+            serde_json::from_str(&current.replace("schema_version\":2", "schema_version\":1"))
+                .unwrap();
+        assert!(legacy.validate().is_err());
+        let future: Store =
+            serde_json::from_str(&current.replace("schema_version\":2", "schema_version\":3"))
+                .unwrap();
+        assert!(future.validate().is_err());
+        assert!(serde_json::from_str::<Store>(
+            &current.replace("\"pinned\":false", "\"color\":\"#2a9cdb\",\"pinned\":false")
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn invalid_calendar_dates_and_times_are_rejected() {
+        assert!(valid_date("2024-02-29"));
+        assert!(!valid_date("2026-02-29"));
+        assert!(!valid_date("2026-04-31"));
+        assert!(!valid_date("broken"));
+        assert!(valid_time("23:59"));
+        assert!(!valid_time("24:00"));
+    }
+
+    #[test]
+    fn repeat_requires_a_timed_countdown_and_known_rule() {
+        let json = r##"{"schema_version":2,"entries":[{"id":"a","name":"下班","entryType":"countdown","date":"2026-09-01","time":"17:00","repeat":"daily","pinned":false,"createdAt":"old","updatedAt":"new"}]}"##;
+        let store: Store = serde_json::from_str(json).unwrap();
+        assert!(store.validate().is_ok());
+
+        let without_time: Store =
+            serde_json::from_str(&json.replace(",\"time\":\"17:00\"", "")).unwrap();
+        assert!(without_time.validate().is_err());
+
+        let elapsed: Store =
+            serde_json::from_str(&json.replace("\"countdown\"", "\"elapsed\"")).unwrap();
+        assert!(elapsed.validate().is_err());
+
+        let unknown: Store =
+            serde_json::from_str(&json.replace("\"daily\"", "\"weekly\"")).unwrap();
+        assert!(unknown.validate().is_err());
+    }
+
+    #[test]
+    fn stale_edits_cannot_overwrite_or_resurrect_an_entry() {
+        let mut store: Store = serde_json::from_str(r##"{"schema_version":2,"entries":[{"id":"a","name":"日期","entryType":"countdown","date":"2026-09-01","pinned":false,"createdAt":"old","updatedAt":"new"}]}"##).unwrap();
+        let mut stale = store.entries[0].clone();
+        stale.name = "旧编辑".into();
+        assert!(store.upsert(stale.clone(), Some("old"), None).is_err());
+        assert_eq!(store.entries[0].name, "日期");
+        assert!(store.upsert(stale.clone(), Some("new"), None).is_ok());
+        store.entries.clear();
+        assert!(store.upsert(stale, Some("new"), None).is_err());
+        assert!(store.entries.is_empty());
+    }
+
+    #[test]
+    fn near_isle_is_single_and_clears_when_archived_or_deleted() {
+        let mut store: Store = serde_json::from_str(r##"{"schema_version":2,"entries":[{"id":"a","name":"日期 A","entryType":"countdown","date":"2026-09-01","pinned":false,"createdAt":"old","updatedAt":"a"},{"id":"b","name":"日期 B","entryType":"elapsed","date":"2026-08-01","pinned":false,"createdAt":"old","updatedAt":"b"}]}"##).unwrap();
+        store.set_near_isle(Some("a".into())).unwrap();
+        assert_eq!(store.near_isle_entry_id.as_deref(), Some("a"));
+        store.set_near_isle(Some("b".into())).unwrap();
+        assert_eq!(store.near_isle_entry_id.as_deref(), Some("b"));
+
+        let mut archived = store.entries[1].clone();
+        archived.archived = Some(true);
+        archived.updated_at = "b2".into();
+        store.upsert(archived, Some("b"), None).unwrap();
+        assert_eq!(store.near_isle_entry_id, None);
+        assert!(store.set_near_isle(Some("missing".into())).is_err());
+    }
 }

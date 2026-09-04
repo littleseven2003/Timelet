@@ -1,5 +1,11 @@
 export type EntryType = 'countdown' | 'elapsed';
 
+/** 条目天数展示单位 */
+export type DisplayUnit = 'day' | 'week' | 'month' | 'year';
+
+/** 循环规则（仅带时刻的条目生效） */
+export type RepeatRule = 'daily' | 'workday';
+
 export interface Entry {
   id: string;
   name: string;
@@ -7,20 +13,19 @@ export interface Entry {
   entryType: EntryType;
   /** ISO 日期（YYYY-MM-DD） */
   date: string;
-  color: string;
+  /** 可选时刻（HH:mm），缺失表示纯日期条目 */
+  time?: string;
+  /** 循环规则，缺失表示单次 */
+  repeat?: RepeatRule;
+  /** 展示单位，缺失按天 */
+  displayUnit?: DisplayUnit;
+  /** 选填备注，面板悬停时展示 */
+  note?: string;
+  /** 手动排序值（拖拽后生成），缺失表示按自动规则排序 */
+  sortIndex?: number;
+  /** 归档后离开活动视图，可恢复；缺失表示活动条目 */
+  archived?: boolean;
   pinned: boolean;
   createdAt: string;
   updatedAt: string;
 }
-
-/** 预设色板（8 色），新增颜色需同步设计文档 */
-export const ENTRY_COLORS = [
-  '#e5484d',
-  '#f76b15',
-  '#ffb224',
-  '#30a46c',
-  '#12a594',
-  '#0091ff',
-  '#6e56cf',
-  '#d6409f',
-] as const;

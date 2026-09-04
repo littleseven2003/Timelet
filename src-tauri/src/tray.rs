@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use serde::Serialize;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Position, Size, WebviewWindow, WindowEvent};
@@ -21,24 +22,23 @@ struct PanelBlurState(Mutex<Option<Instant>>);
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
     app.manage(PanelBlurState::default());
+    app.manage(PanelMenuEntry::default());
     watch_panel_blur(app);
+    watch_panel_menu_events(app);
 
-    let open_config_item = MenuItem::with_id(app, "open-config", "打开配置", true, None::<&str>)?;
+    let open_main_item = MenuItem::with_id(app, "open-main", "打开主界面", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出 Timelet", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open_config_item, &quit])?;
+    let menu = Menu::with_items(app, &[&open_main_item, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
-        .icon(
-            app.default_window_icon()
-                .expect("应用图标缺失，无法创建托盘图标")
-                .clone(),
-        )
+        // 托盘使用独立的黑色字形图标：实底应用图标作模板渲染会变成色块
+        .icon(tauri::include_image!("icons/tray.png"))
         .tooltip("Timelet（时屿）")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {
-            if event.id() == "open-config" {
-                open_config(app);
+            if event.id() == "open-main" {
+                open_main(app, None);
             } else if event.id() == "quit" {
                 app.exit(0);
             }
@@ -66,28 +66,144 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-// 打开（或聚焦已存在的）配置窗口；窗口按需创建，避免启动即建
-fn open_config(app: &AppHandle) {
+// 面板右键菜单选中的条目 id：菜单事件在全局处理器中消费
+#[derive(Default)]
+struct PanelMenuEntry(Mutex<Option<String>>);
+
+// 面板右键菜单事件走 App 级监听，id 加前缀与托盘菜单区分
+fn watch_panel_menu_events(app: &AppHandle) {
+    app.on_menu_event(move |app, event| {
+        let id = event.id().0.as_str();
+        if id == "panel-edit" {
+            let state = app.state::<PanelMenuEntry>();
+            let entry_id = state.0.lock().unwrap().take();
+            open_main(app, entry_id);
+        } else if id == "panel-open-main" {
+            open_main(app, None);
+        }
+    });
+}
+
+// 待执行动作：面板"编辑详情/新增条目"先于配置窗口就绪时暂存，窗口挂载后取走
+#[derive(Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum EntryAction {
+    List,
+    Create,
+    Edit { id: String },
+}
+
+#[derive(Default)]
+pub struct PendingEntryAction(Mutex<Option<EntryAction>>);
+
+// 打开（或聚焦已存在的）主界面；带 entry_id 时进入该条目的编辑态
+pub fn open_main(app: &AppHandle, entry_id: Option<String>) {
+    open_main_with(app, entry_id.map(|id| EntryAction::Edit { id }));
+}
+
+fn open_main_with(app: &AppHandle, action: Option<EntryAction>) {
+    use tauri::Emitter;
+
+    let pending = app.state::<PendingEntryAction>();
+    *pending.0.lock().unwrap() = Some(action.unwrap_or(EntryAction::List));
     if let Some(window) = app.get_webview_window("config") {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+        let _ = app.emit("open-entry-action", ());
         return;
     }
 
-    let result = tauri::webview::WebviewWindowBuilder::new(
+    let mut builder = tauri::webview::WebviewWindowBuilder::new(
         app,
         "config",
         tauri::WebviewUrl::App("index.html".into()),
     )
-    .title("Timelet 设置")
-    .inner_size(640.0, 480.0)
-    .min_inner_size(560.0, 420.0)
-    .build();
+    .title("时屿 · Timelet")
+    .min_inner_size(700.0, 520.0);
 
-    if let Err(err) = result {
-        eprintln!("打开配置窗口失败: {err}");
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.skip_taskbar(crate::settings::hide_app_icon(app));
     }
+
+    // 恢复用户上次调整过的窗口大小与位置
+    if let Some(bounds) = crate::settings::load_window_bounds(app) {
+        builder = builder
+            .position(bounds.x, bounds.y)
+            .inner_size(bounds.width, bounds.height);
+    } else {
+        builder = builder.inner_size(780.0, 560.0);
+    }
+
+    match builder.build() {
+        Ok(window) => watch_config_close(app, &window),
+        Err(err) => eprintln!("打开主界面失败: {err}"),
+    }
+}
+
+// 主界面关闭时记录窗口大小与位置，供下次打开恢复
+fn watch_config_close(app: &AppHandle, window: &tauri::WebviewWindow) {
+    let handle = app.clone();
+    let closer = window.clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { .. } = event {
+            if let Err(err) = crate::settings::save_window_bounds(&handle, &closer) {
+                eprintln!("保存窗口状态失败: {err}");
+            }
+        }
+    });
+}
+
+// 面板"新增条目"直达主界面的新建表单
+#[tauri::command]
+pub fn open_main_create(app: AppHandle) {
+    open_main_with(&app, Some(EntryAction::Create));
+}
+
+// 面板"查看全部条目"打开主窗口列表（不进入新建表单）
+#[tauri::command]
+pub fn open_main_window(app: AppHandle) {
+    open_main(&app, None);
+}
+
+// 面板缩略详情"编辑"直达该条目的编辑表单
+#[tauri::command]
+pub fn open_entry_editor(app: AppHandle, id: String) {
+    open_main(&app, Some(id));
+}
+
+// 面板右键菜单：条目上为"编辑详情 / 打开主界面"，空白处为"打开主界面"
+#[tauri::command]
+pub fn show_panel_menu(
+    app: AppHandle,
+    window: tauri::Window,
+    entry_id: Option<String>,
+) -> Result<(), String> {
+    use tauri::menu::{ContextMenu, Menu, MenuItem};
+
+    let state = app.state::<PanelMenuEntry>();
+    *state.0.lock().unwrap() = entry_id.clone();
+
+    let edit_item = MenuItem::with_id(
+        &app,
+        "panel-edit",
+        "编辑详情",
+        entry_id.is_some(),
+        None::<&str>,
+    )
+    .map_err(|e| e.to_string())?;
+    let open_item = MenuItem::with_id(&app, "panel-open-main", "打开主界面", true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let menu = Menu::with_items(&app, &[&edit_item, &open_item]).map_err(|e| e.to_string())?;
+
+    menu.popup(window).map_err(|e| e.to_string())
+}
+
+// 配置窗口挂载后取走暂存的待执行动作
+#[tauri::command]
+pub fn take_pending_action(state: tauri::State<'_, PendingEntryAction>) -> Option<EntryAction> {
+    state.0.lock().unwrap().take()
 }
 
 // 左键点击托盘图标时切换面板显隐，并在显示前按图标位置重新定位

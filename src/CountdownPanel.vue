@@ -1,179 +1,254 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import { useI18n } from 'vue-i18n';
-import type { Entry } from './types/entry';
 import { useEntries } from './composables/useEntries';
-import { entryDays, sortEntries } from './utils/entries';
+import { useSettings } from './composables/useSettings';
+import { useClock } from './composables/useClock';
+import { panelSelection } from './utils/entries';
+import type { Entry } from './types/entry';
+import FeaturedEntry from './components/FeaturedEntry.vue';
+import EntryRow from './components/EntryRow.vue';
+import IslandAtmosphere from './components/IslandAtmosphere.vue';
+import InterfaceSymbol from './components/InterfaceSymbol.vue';
 
 const { t, locale } = useI18n();
-const { entries, loaded, reload, ensureChangeListener } = useEntries();
-
-// 当天日期与星期，跟随 i18n 语言展示
-const today = computed(() => {
-  const now = new Date();
-  return {
-    date: now.toLocaleDateString(locale.value, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }),
-    weekday: now.toLocaleDateString(locale.value, { weekday: 'long' }),
-  };
-});
-
-const sorted = computed(() => sortEntries(entries.value));
-
-// 天数展示文案：倒计时（今天/剩余/已过期）与正计时
-function daysText(entry: Entry): string {
-  const days = entryDays(entry);
-  if (entry.entryType === 'elapsed') return t('panel.elapsed', { days });
-  if (days === 0) return t('panel.today');
-  if (days < 0) return t('panel.expired', { days: -days });
-  return t('panel.daysLeft', { days });
+const { entries, nearIsleEntryId, loaded, loading, error, busy, reload, upsert, setNearIsle } =
+  useEntries();
+const { settings, error: settingsError, retry: retrySettings } = useSettings();
+const now = useClock();
+const expanded = ref<string | null>(null);
+const actionError = ref('');
+const selection = computed(() =>
+  panelSelection(
+    entries.value,
+    nearIsleEntryId.value,
+    now.value,
+    settings.value.showExpired,
+    settings.value.panelLimit,
+  ),
+);
+const empty = computed(() => !selection.value.featured && selection.value.groups.length === 0);
+const today = computed(() =>
+  new Date(now.value).toLocaleDateString(locale.value, {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  }),
+);
+async function act(action: () => Promise<unknown>) {
+  actionError.value = '';
+  try {
+    await action();
+  } catch (cause) {
+    actionError.value = String(cause);
+  }
 }
-
-onMounted(() => {
-  reload();
-  ensureChangeListener();
-});
+const openMain = () => act(() => invoke('open_main_window'));
+const openCreate = () => act(() => invoke('open_main_create'));
+const openEdit = (entry: Entry) => act(() => invoke('open_entry_editor', { id: entry.id }));
+const pin = (entry: Entry) =>
+  act(() => upsert({ ...entry, pinned: !entry.pinned, updatedAt: new Date().toISOString() }));
+const toggleNearIsle = (entry: Entry) =>
+  act(() => setNearIsle(nearIsleEntryId.value === entry.id ? undefined : entry.id));
 </script>
 
 <template>
-  <aside class="panel">
-    <header class="panel__header">
-      <span class="panel__date">{{ today.date }}</span>
-      <span class="panel__weekday">{{ today.weekday }}</span>
+  <aside
+    class="panel"
+    @contextmenu.self.prevent="act(() => invoke('show_panel_menu', { entryId: null }))"
+  >
+    <IslandAtmosphere :strength="0.7" />
+    <header class="panel-header">
+      <div>
+        <strong>{{ t('panel.brand') }}</strong
+        ><span>{{ today }}</span>
+      </div>
+      <button
+        class="add-button"
+        type="button"
+        :aria-label="t('panel.addEntry')"
+        :disabled="busy || !!error"
+        @click="openCreate"
+      >
+        <InterfaceSymbol name="plus" />
+      </button>
     </header>
-
-    <div v-if="loaded && sorted.length === 0" class="panel__empty">
-      <p class="panel__empty-title">{{ t('panel.emptyTitle') }}</p>
-      <p class="panel__empty-hint">{{ t('panel.emptyHint') }}</p>
+    <div class="panel-scroll">
+      <div v-if="error" class="error-notice" role="alert">
+        <strong>{{ t('common.loadError') }}</strong>
+        <p>{{ error }}</p>
+        <button class="btn" type="button" :disabled="loading" @click="reload">
+          {{ t('common.retry') }}
+        </button>
+      </div>
+      <div v-if="settingsError" class="error-notice" role="alert">
+        {{ settingsError
+        }}<button class="btn" type="button" @click="retrySettings">{{ t('common.retry') }}</button>
+      </div>
+      <div v-if="actionError" class="error-notice" role="alert">
+        {{ actionError
+        }}<button class="btn" type="button" @click="actionError = ''">
+          {{ t('common.dismiss') }}
+        </button>
+      </div>
+      <p v-if="!loaded && !error" class="empty" role="status">{{ t('common.loading') }}</p>
+      <div v-else-if="loaded && empty && !error" class="empty">
+        <InterfaceSymbol name="now" />
+        <p>
+          {{
+            t(entries.some((entry) => !entry.archived) ? 'panel.filteredEmpty' : 'panel.emptyTitle')
+          }}
+        </p>
+        <button class="btn" type="button" @click="openCreate">
+          {{ t(entries.some((entry) => !entry.archived) ? 'panel.addEntry' : 'panel.createFirst') }}
+        </button>
+      </div>
+      <FeaturedEntry
+        v-if="selection.featured"
+        :entry="selection.featured"
+        :now="now"
+        compact
+        @edit="openEdit"
+      />
+      <section v-for="group in selection.groups" :key="group.key" class="panel-group">
+        <h2>{{ t(`panel.sections.${group.key}`) }}</h2>
+        <ul>
+          <EntryRow
+            v-for="entry in group.items"
+            :key="entry.id"
+            :entry="entry"
+            :now="now"
+            :expanded="expanded === entry.id"
+            :near-isle="nearIsleEntryId === entry.id"
+            compact
+            :disabled="busy || !!error"
+            @expand="expanded = expanded === entry.id ? null : entry.id"
+            @edit="openEdit(entry)"
+            @pin="pin(entry)"
+            @near-isle="toggleNearIsle(entry)"
+          />
+        </ul>
+      </section>
     </div>
-
-    <ul v-else class="panel__list">
-      <li v-for="entry in sorted" :key="entry.id" class="panel-item">
-        <span class="panel-item__color" :style="{ backgroundColor: entry.color }" />
-        <span class="panel-item__name" :title="entry.name">{{ entry.name }}</span>
-        <span
-          class="panel-item__days"
-          :style="{ color: entry.color }"
-        >
-          {{ daysText(entry) }}
-        </span>
-      </li>
-    </ul>
+    <footer class="panel-footer">
+      <button type="button" @click="openMain">
+        <InterfaceSymbol name="window" /><span>{{ t('panel.viewAll') }}</span
+        ><InterfaceSymbol name="arrow" />
+      </button>
+    </footer>
   </aside>
 </template>
 
 <style scoped>
 .panel {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background-color: #f6f6f6;
-  color: #1a1a1a;
+  position: relative;
+  height: 100dvh;
+  min-height: 260px;
+  background: var(--ts-surface);
+  border: 1px solid var(--ts-line);
   border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-}
-
-.panel__header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.panel__date {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.panel__weekday {
-  font-size: 13px;
-  opacity: 0.6;
-}
-
-.panel__empty {
-  flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
+  color: var(--ts-text);
+}
+.panel-header {
+  position: relative;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 24px;
-  text-align: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 19px 19px 15px;
+  flex-shrink: 0;
 }
-
-.panel__empty-title {
-  font-size: 14px;
-  font-weight: 500;
+.panel-header > div {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
 }
-
-.panel__empty-hint {
-  font-size: 12px;
-  opacity: 0.55;
+.panel-header strong {
+  font-size: 16px;
+  font-weight: 550;
+  letter-spacing: 0.1em;
 }
-
-.panel__list {
-  list-style: none;
-  margin: 0;
-  padding: 6px 8px;
+.panel-header span {
+  font-size: 10px;
+  color: var(--ts-text-2);
+}
+.add-button {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ts-line);
+  background: var(--ts-surface);
+  color: var(--ts-blue);
+  border-radius: 7px;
+  min-width: 30px;
+  height: 30px;
+  cursor: pointer;
+}
+.panel-scroll {
+  position: relative;
   flex: 1;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+  padding: 0 14px 10px;
+  scrollbar-width: thin;
+  min-height: 0;
 }
-
-.panel-item {
+.panel-group {
+  margin-top: 17px;
+}
+.panel-group h2 {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  margin: 0 3px 3px;
+  color: var(--ts-text-2);
+}
+.panel-group ul {
+  padding: 0;
+  margin: 0;
+}
+.empty {
+  padding: 48px 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ts-text-2);
+  line-height: 1.8;
+}
+.empty svg {
+  width: 46px;
+  height: 46px;
+  color: var(--ts-blue);
+  opacity: 0.6;
+}
+.panel-footer {
+  position: relative;
+  border-top: 1px solid var(--ts-line);
+  flex-shrink: 0;
+}
+.panel-footer button {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 8px;
-  border-radius: 8px;
+  gap: 9px;
+  padding: 14px 18px;
+  color: var(--ts-text-2);
+  background: transparent;
+  border: 0;
+  font-size: 11px;
+  cursor: pointer;
 }
-
-.panel-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
-
-.panel-item__color {
-  width: 4px;
-  height: 26px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.panel-item__name {
+.panel-footer button span {
   flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: left;
 }
-
-.panel-item__days {
-  font-size: 14px;
-  font-weight: 600;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
+.panel-footer button:hover {
+  background: var(--ts-hover);
 }
-
-@media (prefers-color-scheme: dark) {
-  .panel {
-    background-color: #2b2b2b;
-    color: #f0f0f0;
-    border-color: rgba(255, 255, 255, 0.14);
-  }
-
-  .panel__header {
-    border-bottom-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .panel-item:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-  }
+.panel-footer button svg:last-child {
+  width: 13px;
 }
 </style>
