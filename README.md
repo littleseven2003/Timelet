@@ -30,7 +30,7 @@ pnpm test           # 日期与面板选择规则回归
 
 ## 本地打包
 
-macOS 需 Xcode Command Line Tools；Windows 需 MSVC C++ 构建工具、Windows SDK、Rust MSVC 工具链与 WebView2。依赖需事先安装，不通过本项目脚本修改系统环境。
+macOS 需 Xcode Command Line Tools；Windows 需 MSVC C++ 构建工具、Windows SDK、Rust MSVC 工具链与 WebView2。依赖需事先安装，不通过本项目脚本修改系统环境。跨平台检出后，先运行对应的 Tauri 开发或构建命令，使其同步当前平台的 Cargo 特性，再单独运行 Cargo 测试与 Clippy；直接使用另一平台留下的清单可能触发特性一致性错误。
 
 | 执行环境 | 命令 | 产物 |
 | --- | --- | --- |
