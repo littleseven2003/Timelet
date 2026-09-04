@@ -30,7 +30,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "退出 Timelet", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open_main_item, &quit])?;
 
-    let mut builder = TrayIconBuilder::with_id("main-tray")
+    let builder = TrayIconBuilder::with_id("main-tray")
         // 托盘使用独立的黑色字形图标：实底应用图标作模板渲染会变成色块
         .icon(tauri::include_image!("icons/tray.png"))
         .tooltip("Timelet（时屿）")
@@ -58,9 +58,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
 
     // macOS 菜单栏要求图标为模板样式以自适应深浅色
     #[cfg(target_os = "macos")]
-    {
-        builder = builder.icon_as_template(true);
-    }
+    let builder = builder.icon_as_template(true);
 
     builder.build(app)?;
     Ok(())
