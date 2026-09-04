@@ -655,6 +655,8 @@
 
 本批不配置 Developer ID/Windows 发布证书或公证服务；macOS 二进制可能含本地运行所需的临时签名，不视为已完成分发签名。安装包仍为本地验证产物，不创建 Release、发布标签或远程构建工作流。Windows 安装、任务栏显隐、自启、托盘与数据重启须在真实系统环境中验收；M3 剩余待办不随打包自动通过。
 
+首批结果：macOS arm64 Release APP/DMG 已生成，包信息、镜像完整性及隔离副本的保存/重启、Dock 设置恢复通过。现有 Windows 11 虚拟机为 ARM64 且未发现构建工具链；Windows x64 安装包尚未生成，远程构建方案待确认，M4 仍未完成。详细测试范围见 [验收记录](VALIDATION.md)。
+
 依据：[Tauri macOS 打包](https://v2.tauri.app/distribute/macos-application-bundle/)、[Windows 安装包与 WebView2](https://v2.tauri.app/distribute/windows-installer/)。
 
 ## 12. 风险与注意事项
