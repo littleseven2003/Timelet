@@ -9,6 +9,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "check:desktop": "tauri build --debug --no-bundle --no-sign -- --locked",
     "bundle:mac": "tauri build --bundles app,dmg --no-sign -- --locked",
     "bundle:windows": "tauri build --target x86_64-pc-windows-msvc --bundles nsis --no-sign -- --locked",
     "lint": "eslint .",

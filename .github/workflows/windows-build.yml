@@ -79,7 +79,7 @@ jobs:
         run: cargo fmt --check
 
       - name: 同步 Windows 特性并验证调试编译
-        run: pnpm tauri build --debug --no-bundle --no-sign -- --locked
+        run: pnpm check:desktop
 
       - name: Rust 业务回归
         working-directory: src-tauri

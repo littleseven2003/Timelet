@@ -24,6 +24,7 @@
 pnpm install --frozen-lockfile # 按锁文件安装前端依赖
 pnpm tauri dev      # 本地开发调试
 pnpm tauri build    # 构建当前平台安装包
+pnpm check:desktop # 同步当前平台特性并验证桌面调试编译（不打包）
 pnpm lint           # 前端代码检查
 pnpm test           # 日期与面板选择规则回归
 ```
