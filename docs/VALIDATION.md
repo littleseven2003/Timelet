@@ -2,7 +2,7 @@
 
 ## 多平台远程构建入口
 
-`7961bd0` 扩展同一次运行中的 macOS arm64 与 Windows x64 作业，并拆分三个下载入口。工作流及文档格式检查通过；已触发[运行 34182610598](https://github.com/littleseven2003/Timelet/actions/runs/34182610598)，触发后状态为排队。此记录仅确认配置提交与触发成功，构建结果须以该运行的最终状态为准。
+`7961bd0` 扩展同一次运行中的 macOS arm64 与 Windows x64 作业，并拆分三个下载入口。[运行 34182610598](https://github.com/littleseven2003/Timelet/actions/runs/34182610598) 的 macOS 与 Windows 作业均成功，分别生成 macOS 产物和两种 Windows 安装范围；该运行早于单实例修复。
 
 ## 2026-09-08 桌面应用单实例修复
 
@@ -12,7 +12,11 @@ Windows 11 x64 管理员安装版实测发现：Timelet 已运行后再次双击
 
 本地检查结果：前端 lint、10 项业务测试、类型与生产构建通过；Rust 格式、12 项业务测试、Clippy 和桌面调试构建通过，无告警。macOS 使用 `com.littleseven.timelet.single-instance-test` 隔离标识打包测试应用，第一次强制启动后进程数为 1；第二次强制启动后仍为同一进程，首个进程显示标题为“时屿 · Timelet”的完整主窗口，导航、搜索、空状态和新建入口均已加载。测试副本已退出并清理，未发现隔离数据目录，日常 Timelet 数据未读取或改写。
 
-待完成：远端 macOS arm64 与 Windows x64 当前用户版、管理员版重新构建；项目所有者在原生 Windows 11 x64 分别验证主窗口关闭和打开时再次双击、托盘及进程数量、退出。远端构建成功和 macOS 单实例结果不能替代 Windows 原生交互验收。
+单实例实现的[运行 34184844838](https://github.com/littleseven2003/Timelet/actions/runs/34184844838) 全部成功：macOS 作业完成检查并生成 APP/DMG，Windows 作业完成前端 10 项、Rust 12 项、格式、Clippy、调试编译及两种 NSIS 安装范围。项目所有者同时反馈 Windows 上测试近期构建版本未发现其他问题；由于反馈未指明运行号，暂不把它归入某一产物的单实例原生验收。仍需在原生 Windows 11 x64 分别验证主窗口关闭和打开时再次双击、托盘及进程数量、退出。
+
+### User / System 对外命名
+
+后续 Windows 下载入口和文件名使用 User/System：User 对应 `currentUser` 与 `%LOCALAPPDATA%`，System 对应 `perMachine`、`Program Files` 和 UAC。构建命令及附加配置同步改为 `bundle:windows:system` 与 `tauri.windows.system.conf.json`；安装行为没有变化。此前运行中的 `current-user`、`admin` 文件名是历史真实产物，保留原记录。命名修改需经下一次远端运行确认两个新入口及文件匹配。
 
 日期：2026-09-01。原 P0/P1 复查起点：`2c74c26`；本次分支：`feat/recurrence-and-panel-polish`。本次代码验收基线：`24d48dc`。当前版本保持 `0.1.0`。
 
