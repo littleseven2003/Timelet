@@ -43,7 +43,9 @@ macOS 命令按本机构架构建，当前 Apple Silicon 产物不是 Intel/Univ
 
 Windows 安装界面为简体中文，同时提供当前用户版与管理员版。普通环境优先使用当前用户版；若设备策略禁止普通权限写入可执行文件，使用自动请求 UAC 的管理员版。两种安装范围应保持一致，切换前先卸载原安装，默认不删除应用数据。安装、更新或卸载时如果 Timelet 正在运行，安装程序会先提示关闭。缺少 WebView2 时需要联网下载并安装运行时；Windows ARM 上的 x64 仿真测试与原生 x64 验收分别记录。
 
-公开仓库尚未发布正式安装包。Windows 构建工作流在 `feat/platform-build` 的代码或构建配置推送时触发，使用 Windows x64 构建机、Node.js 24、pnpm 11.9.0 和 Rust stable，先检查再生成当前用户版与管理员版 NSIS 安装包。工作流合入默认分支后可手动触发。
+公开仓库尚未发布正式安装包。“macOS 与 Windows 安装包构建”工作流在 `feat/platform-build` 的代码或构建配置推送时触发。macOS arm64 与 Windows x64 作业并行检查和打包，使用 Node.js 24、pnpm 11.9.0 和 Rust stable。工作流合入默认分支后可手动触发。
+
+运行完成后，在 Actions 运行详情底部的 Artifacts 分别下载 `Timelet-macos-arm64-…`、`Timelet-windows-x64-current-user-…`、`Timelet-windows-x64-admin-…`。macOS 入口包含 DMG 和保留权限的 APP 归档，Windows 每个入口包含对应 EXE；均附校验文件，保留 7 天。
 
 在仓库 Actions 中打开对应运行，检查提交号及结果后下载 `Timelet-windows-x64-<提交号>` 构建产物；内含安装程序与 `SHA256SUMS.txt`，仅保留 7 天，下载需要登录 GitHub。产物未经发布签名，不是正式 Release；构建成功不能代替安装和桌面交互验收。完整键盘操作、200% 缩放、多屏、系统变化等待办继续在验收记录中跟踪。
 

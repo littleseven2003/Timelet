@@ -646,6 +646,8 @@ Windows 主窗口创建约定（2026-09-08）：托盘菜单、快捷面板和�
 
 ### 11.1 M4 打包约定（2026-09-04）
 
+远程构建提供三个独立下载入口：macOS Apple Silicon（arm64）的 DMG 与 APP 归档、Windows x64 当前用户版、Windows x64 管理员版。macOS 在托管构建机执行与 Windows 并行的检查和打包，APP 先归档以保留执行权限和符号链接；各入口附 SHA-256 校验文件，产物保留 7 天。macOS 当前不包含 Intel 或 Universal 构建。
+
 共用配置为 `src-tauri/tauri.conf.json`，平台配置由同目录的 `tauri.macos.conf.json`、`tauri.windows.conf.json` 自动合并。不混用两端系统图标资源，不改变应用标识或本地数据位置。
 
 | 平台          | 当前打包目标                                            | 安装与运行约定                                                                                                            |
