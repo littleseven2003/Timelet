@@ -16,7 +16,9 @@ Windows 11 x64 管理员安装版实测发现：Timelet 已运行后再次双击
 
 ### User / System 对外命名
 
-后续 Windows 下载入口和文件名使用 User/System：User 对应 `currentUser` 与 `%LOCALAPPDATA%`，System 对应 `perMachine`、`Program Files` 和 UAC。构建命令及附加配置同步改为 `bundle:windows:system` 与 `tauri.windows.system.conf.json`；安装行为没有变化。此前运行中的 `current-user`、`admin` 文件名是历史真实产物，保留原记录。命名修改需经下一次远端运行确认两个新入口及文件匹配。
+后续 Windows 下载入口和文件名使用 User/System：User 对应 `currentUser` 与 `%LOCALAPPDATA%`，System 对应 `perMachine`、`Program Files` 和 UAC。构建命令及附加配置同步改为 `bundle:windows:system` 与 `tauri.windows.system.conf.json`；安装行为没有变化。此前运行中的 `current-user`、`admin` 文件名是历史真实产物，保留原记录。
+
+命名提交 `5136770` 经[运行 34190339804](https://github.com/littleseven2003/Timelet/actions/runs/34190339804) 验证：macOS 作业 6 分 39 秒完成，Windows 作业 12 分 12 秒完成，全部检查、两种 NSIS 构建、暂存、校验和与上传步骤通过。实际下载入口为 `Timelet-macos-arm64-cb5b9f7…`、`Timelet-windows-x64-user-cb5b9f7…` 和 `Timelet-windows-x64-system-cb5b9f7…`，均处于有效状态并保留 7 天。该运行证明新名称和构建链路可用，不替代 User/System 在目标 Windows 电脑上的分别安装与升级验收。
 
 日期：2026-09-01。原 P0/P1 复查起点：`2c74c26`；本次分支：`feat/recurrence-and-panel-polish`。本次代码验收基线：`24d48dc`。当前版本保持 `0.1.0`。
 
