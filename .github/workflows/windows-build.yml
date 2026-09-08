@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   build:
-    name: 检查并构建 NSIS 安装包
+    name: 检查并构建双 NSIS 安装包
     runs-on: windows-2022
     timeout-minutes: 45
     defaults:
@@ -89,14 +89,36 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --locked --all-targets -- -D warnings
 
-      - name: 构建 Windows x64 安装包
+      - name: 构建当前用户安装包
         run: pnpm bundle:windows
+
+      - name: 暂存当前用户安装包
+        run: |
+          $bundlePath = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'
+          $outputPath = 'src-tauri/target/windows-installers'
+          $version = (Get-Content -LiteralPath 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
+          $installers = @(Get-ChildItem -Path $bundlePath -Filter '*.exe' -File)
+          if ($installers.Count -ne 1) { throw "当前用户安装包数量异常：$($installers.Count)" }
+          New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
+          Move-Item -LiteralPath $installers[0].FullName -Destination "$outputPath/Timelet_${version}_x64-current-user-setup.exe"
+
+      - name: 构建管理员安装包
+        run: pnpm bundle:windows:admin
+
+      - name: 暂存管理员安装包
+        run: |
+          $bundlePath = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'
+          $outputPath = 'src-tauri/target/windows-installers'
+          $version = (Get-Content -LiteralPath 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
+          $installers = @(Get-ChildItem -Path $bundlePath -Filter '*.exe' -File)
+          if ($installers.Count -ne 1) { throw "管理员安装包数量异常：$($installers.Count)" }
+          Move-Item -LiteralPath $installers[0].FullName -Destination "$outputPath/Timelet_${version}_x64-admin-setup.exe"
 
       - name: 生成安装包校验和
         run: |
-          $bundlePath = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'
+          $bundlePath = 'src-tauri/target/windows-installers'
           $installers = @(Get-ChildItem -Path $bundlePath -Filter '*.exe' -File)
-          if ($installers.Count -eq 0) { throw '未找到 NSIS 安装包' }
+          if ($installers.Count -ne 2) { throw "最终安装包数量异常：$($installers.Count)" }
           $checksums = $installers | ForEach-Object {
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)"
@@ -109,7 +131,7 @@ jobs:
         with:
           name: Timelet-windows-x64-${{ github.sha }}
           path: |
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/SHA256SUMS.txt
+            src-tauri/target/windows-installers/*.exe
+            src-tauri/target/windows-installers/SHA256SUMS.txt
           retention-days: 7
           if-no-files-found: error
