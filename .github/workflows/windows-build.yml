@@ -89,30 +89,30 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --locked --all-targets -- -D warnings
 
-      - name: 构建当前用户安装包
+      - name: 构建 User 安装包
         run: pnpm bundle:windows
 
-      - name: 暂存当前用户安装包
+      - name: 暂存 User 安装包
         run: |
           $bundlePath = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'
           $outputPath = 'src-tauri/target/windows-installers'
           $version = (Get-Content -LiteralPath 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
           $installers = @(Get-ChildItem -Path $bundlePath -Filter '*.exe' -File)
-          if ($installers.Count -ne 1) { throw "当前用户安装包数量异常：$($installers.Count)" }
+          if ($installers.Count -ne 1) { throw "User 安装包数量异常：$($installers.Count)" }
           New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
-          Move-Item -LiteralPath $installers[0].FullName -Destination "$outputPath/Timelet_${version}_x64-current-user-setup.exe"
+          Move-Item -LiteralPath $installers[0].FullName -Destination "$outputPath/Timelet_${version}_x64-user-setup.exe"
 
-      - name: 构建管理员安装包
-        run: pnpm bundle:windows:admin
+      - name: 构建 System 安装包
+        run: pnpm bundle:windows:system
 
-      - name: 暂存管理员安装包
+      - name: 暂存 System 安装包
         run: |
           $bundlePath = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'
           $outputPath = 'src-tauri/target/windows-installers'
           $version = (Get-Content -LiteralPath 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
           $installers = @(Get-ChildItem -Path $bundlePath -Filter '*.exe' -File)
-          if ($installers.Count -ne 1) { throw "管理员安装包数量异常：$($installers.Count)" }
-          Move-Item -LiteralPath $installers[0].FullName -Destination "$outputPath/Timelet_${version}_x64-admin-setup.exe"
+          if ($installers.Count -ne 1) { throw "System 安装包数量异常：$($installers.Count)" }
+          Move-Item -LiteralPath $installers[0].FullName -Destination "$outputPath/Timelet_${version}_x64-system-setup.exe"
 
       - name: 生成安装包校验和
         run: |
@@ -126,22 +126,22 @@ jobs:
           $checksums | Set-Content -LiteralPath "$bundlePath/SHA256SUMS.txt" -Encoding utf8
           $checksums
 
-      - name: 保存当前用户版（7 天）
+      - name: 保存 User 版（7 天）
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Timelet-windows-x64-current-user-${{ github.sha }}
+          name: Timelet-windows-x64-user-${{ github.sha }}
           path: |
-            src-tauri/target/windows-installers/*-current-user-setup.exe
+            src-tauri/target/windows-installers/*-user-setup.exe
             src-tauri/target/windows-installers/SHA256SUMS.txt
           retention-days: 7
           if-no-files-found: error
 
-      - name: 保存管理员版（7 天）
+      - name: 保存 System 版（7 天）
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Timelet-windows-x64-admin-${{ github.sha }}
+          name: Timelet-windows-x64-system-${{ github.sha }}
           path: |
-            src-tauri/target/windows-installers/*-admin-setup.exe
+            src-tauri/target/windows-installers/*-system-setup.exe
             src-tauri/target/windows-installers/SHA256SUMS.txt
           retention-days: 7
           if-no-files-found: error
