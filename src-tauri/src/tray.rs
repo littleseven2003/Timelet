@@ -21,6 +21,8 @@ const BLUR_RACE_WINDOW: Duration = Duration::from_millis(250);
 struct PanelBlurState(Mutex<Option<Instant>>);
 
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
+    #[cfg(target_os = "windows")]
+    app.manage(MainWindowOpenLock::default());
     app.manage(PanelBlurState::default());
     app.manage(PanelMenuEntry::default());
     watch_panel_blur(app);
@@ -94,12 +96,32 @@ pub enum EntryAction {
 #[derive(Default)]
 pub struct PendingEntryAction(Mutex<Option<EntryAction>>);
 
+#[cfg(target_os = "windows")]
+#[derive(Default)]
+struct MainWindowOpenLock(Mutex<()>);
+
 // 打开（或聚焦已存在的）主界面；带 entry_id 时进入该条目的编辑态
 pub fn open_main(app: &AppHandle, entry_id: Option<String>) {
     open_main_with(app, entry_id.map(|id| EntryAction::Edit { id }));
 }
 
 fn open_main_with(app: &AppHandle, action: Option<EntryAction>) {
+    #[cfg(target_os = "windows")]
+    {
+        // WebView2 创建窗口时需要主线程继续处理消息，不能在同步命令或菜单回调内等待。
+        let app = app.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let state = app.state::<MainWindowOpenLock>();
+            // 锁只在后台任务内等待，串行检查窗口存在性与创建，避免快速点击重复创建。
+            let _guard = state.0.lock().unwrap_or_else(|error| error.into_inner());
+            open_main_now(&app, action);
+        });
+    }
+    #[cfg(not(target_os = "windows"))]
+    open_main_now(app, action);
+}
+
+fn open_main_now(app: &AppHandle, action: Option<EntryAction>) {
     use tauri::Emitter;
 
     let pending = app.state::<PendingEntryAction>();
