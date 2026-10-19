@@ -251,7 +251,7 @@
 | v0.2 | 循环重复扩展（每周/每月/每年）；法定节假日与调休识别；条目分组；临近状态与面板进度展示（潮线） |
 | v0.3 | 提醒类型与到期通知（提前 N 天、稍后提醒）；纯黑 OLED 主题；智能提示语；开机自启完善            |
 | v0.4 | 数据导入导出（JSON 备份恢复）；农历与生日类型；英文界面（启用预留的 i18n 结构）                |
-| v1.0 | 双平台安装包经 GitHub Releases 发布；README、使用说明、签名更新与正式发布验收                  |
+| v1.0 | 优先发布 macOS 安装包；README、使用说明、签名更新与正式发布验收；Windows 后续适配              |
 | v1.x | 首次正式版发布后依据真实使用反馈修饰界面细节，持续改善平台观感、可读性与无障碍                 |
 
 优先级判断标准：新能力是否让用户更快理解重要时间，还是只是让软件看起来"功能更多"。应谨慎评估的扩展：复杂自然语言输入、大型日历视图、社交分享与公开纪念页、成就体系与重型统计、过多主题皮肤。
@@ -670,7 +670,7 @@ Windows **User 版**使用 `currentUser`，默认写入 `%LOCALAPPDATA%\Timelet`
 
 本批不配置 Developer ID/Windows 发布证书或公证服务；macOS 二进制可能含本地运行所需的临时签名，不视为已完成分发签名。安装包用于验证，不创建 Release 或发布标签。远程工作流仅授予源码读取权限，不自动合并。Windows 安装、任务栏显隐、自启、托盘与数据重启保留到后续 Windows 阶段，在真实系统环境中验收；M3 剩余待办不随打包自动通过。
 
-当前结果（2026-10-19）：应用源码基线 `2f9a546` 的远程运行 `39187410267` 全部成功，包含 macOS APP/DMG 与历史 Windows User/System 产物。macOS 双屏定位缺陷已获实机确认恢复正常。项目所有者随后批准以 macOS 为本阶段范围，Windows 开发与远程构建暂停；调整后的工作流验证通过即可收尾合并。其他 macOS 排列、拔插和完整缩放矩阵继续作为发布前验收，不阻止已确认范围的阶段整合。详细进度见 [验收记录](VALIDATION.md)。
+当前结果（2026-10-19）：应用源码基线 `2f9a546` 的远程运行 `39187410267` 全部成功，包含 macOS APP/DMG 与历史 Windows User/System 产物。macOS 双屏定位缺陷已获实机确认恢复正常。项目所有者随后批准以 macOS 为本阶段范围，Windows 开发与远程构建暂停；调整后的工作流运行 `39189236658` 全部通过，Windows 作业跳过，M4 按该范围完成阶段验收并按授权整合主干。其他 macOS 排列、拔插和完整缩放矩阵继续作为发布前验收。详细记录见 [验收记录](VALIDATION.md)。
 
 依据：[Tauri macOS 打包](https://v2.tauri.app/distribute/macos-application-bundle/)、[Windows 安装包与 WebView2](https://v2.tauri.app/distribute/windows-installer/)、[Tauri 单实例组件](https://v2.tauri.app/plugin/single-instance/)。
 
