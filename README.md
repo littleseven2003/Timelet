@@ -8,23 +8,46 @@
 - 条目支持日期倒计时与正计时（已过天数）两种类型
 - 带时刻倒数日支持仅一次、每天和周一至周五，可持续显示距离下一次发生的小时与分钟
 - 支持搜索、复制、置顶、手动排序、归档恢复及操作撤销
+- 可将任意活动条目设为唯一近屿，与置顶排序独立
 - 主窗口、面板与编辑器采用统一主题，支持跟随系统、浅色、深色
+- 可隐藏 macOS Dock 图标或 Windows 主窗口任务栏按钮，保留菜单栏/系统托盘入口
 - 数据保存在本机；覆盖前备份，读取异常停止写入，保存失败保留草稿
 - 中文界面（预留多语言结构）
 
-> 当前版本 `0.1.0`，本轮界面与可靠性改进仍在功能分支验收。独立提醒和系统通知尚未实现，重复频率只更新倒数时间。设计及当前边界见 [设计文档](docs/DESIGN.md)，测试结果见 [验收记录](docs/VALIDATION.md)。
+> 当前版本 `0.1.0`，M4 已按 macOS 优先范围完成阶段验收；Windows 开发、远程构建及手动验收移至后续阶段。尚未完成全部桌面与发布验收。独立提醒和系统通知尚未实现，重复频率只更新倒数时间。设计及当前边界见 [设计文档](docs/DESIGN.md)，测试结果见 [验收记录](docs/VALIDATION.md)。
 
 ## 开发
 
 环境要求：Node.js ≥ 20、pnpm ≥ 9、Rust stable。
 
 ```bash
-pnpm install        # 安装前端依赖
+pnpm install --frozen-lockfile # 按锁文件安装前端依赖
 pnpm tauri dev      # 本地开发调试
 pnpm tauri build    # 构建当前平台安装包
+pnpm check:desktop # 同步当前平台特性并验证桌面调试编译（不打包）
 pnpm lint           # 前端代码检查
 pnpm test           # 日期与面板选择规则回归
 ```
+
+## 本地打包
+
+macOS 需 Xcode Command Line Tools；Windows 需 MSVC C++ 构建工具、Windows SDK、Rust MSVC 工具链与 WebView2。依赖需事先安装，不通过本项目脚本修改系统环境。跨平台检出后，先运行对应的 Tauri 开发或构建命令，使其同步当前平台的 Cargo 特性，再单独运行 Cargo 测试与 Clippy；直接使用另一平台留下的清单可能触发特性一致性错误。
+
+| 执行环境 | 命令                         | 产物                                                                          |
+| -------- | ---------------------------- | ----------------------------------------------------------------------------- |
+| macOS    | `pnpm bundle:mac`            | `src-tauri/target/release/bundle/macos/Timelet.app` 与 `bundle/dmg/` 下的 DMG |
+| Windows  | `pnpm bundle:windows`        | 不需要管理员权限、安装到当前用户目录的 x64 NSIS 安装程序                      |
+| Windows  | `pnpm bundle:windows:system` | 自动请求管理员权限、安装到 `Program Files` 的 x64 NSIS 安装程序               |
+
+macOS 命令按本机构架构建，当前 Apple Silicon 产物不是 Intel/Universal 包。最低系统声明为 macOS 12.0，仍需对应旧系统实测。打包命令使用 Cargo 锁文件，并明确跳过分发签名；本地运行的临时签名不等于 Developer ID 签名或公证，不能承诺下载到其他设备后可直接通过系统安全检查。
+
+Windows 安装界面为简体中文，同时提供 User 版与 System 版。User 版安装到当前用户目录且通常无需提升权限；System 版安装到 `Program Files` 并自动请求 UAC。普通环境优先使用 User 版；若设备策略禁止普通权限写入可执行文件，使用 System 版。两种安装范围应保持一致，切换前先卸载原安装，默认不删除应用数据。安装、更新或卸载时如果 Timelet 正在运行，安装程序会先提示关闭。缺少 WebView2 时需要联网下载并安装运行时；Windows ARM 上的 x64 仿真测试与原生 x64 验收分别记录。
+
+公开仓库尚未发布正式安装包。“macOS 安装包构建”工作流在 `main` 和 `feat/platform-build` 的代码或构建配置推送时触发，并支持手动触发。当前仅执行 macOS arm64 检查和打包，使用 Node.js 24、pnpm 11.9.0 和 Rust stable。工作流文件沿用 `.github/workflows/windows-build.yml` 路径，Windows 作业暂停，已有本地 User/System 构建配置保留供后续恢复。
+
+运行完成后，在 Actions 运行详情底部的 Artifacts 下载 `Timelet-macos-arm64-…`，包含 DMG、保留权限的 APP 归档和校验文件，保留 7 天。当前运行不生成 Windows 产物；历史 User/System 产物按原保留期处理。
+
+在仓库 Actions 中打开对应运行，检查提交号及结果后下载所需平台和安装范围的构建产物；内含安装程序与 `SHA256SUMS.txt`，仅保留 7 天，下载需要登录 GitHub。产物未经发布签名，不是正式 Release；构建成功不能代替安装和桌面交互验收。完整键盘操作、200% 缩放、多屏、系统变化等待办继续在验收记录中跟踪。
 
 ## 许可证
 

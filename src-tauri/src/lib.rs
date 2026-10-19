@@ -8,7 +8,15 @@ use tauri_plugin_autostart::MacosLauncher;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || tray::open_main(&handle, None));
+    }));
+
+    builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,

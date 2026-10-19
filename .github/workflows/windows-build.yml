@@ -1,0 +1,215 @@
+name: macOS 安装包构建
+
+on:
+  push:
+    branches: [main, feat/platform-build]
+    paths:
+      - .github/workflows/windows-build.yml
+      - src/**
+      - src-tauri/**
+      - public/**
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - '*config*'
+      - index.html
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-packages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Windows 适配移至后续阶段，恢复时再启用此作业。
+    if: ${{ false }}
+    name: 检查并构建双 NSIS 安装包
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          architecture: x64
+          package-manager-cache: false
+
+      - name: 安装 pnpm
+        run: npm install --global pnpm@11.9.0
+
+      - name: 配置 Rust 工具链
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup default stable
+
+      - name: 记录构建环境
+        run: |
+          node --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustc --version --verbose
+
+      - name: 按锁文件安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 前端静态检查
+        run: pnpm lint
+
+      - name: 前端业务回归
+        run: pnpm test
+
+      - name: 类型检查与前端构建
+        run: pnpm build
+
+      - name: Rust 格式检查
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: 同步 Windows 特性并验证调试编译
+        run: pnpm check:desktop
+
+      - name: Rust 业务回归
+        working-directory: src-tauri
+        run: cargo test --locked --lib
+
+      - name: Rust 静态检查
+        working-directory: src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: 构建 User 安装包
+        run: pnpm bundle:windows
+
+      - name: 暂存 User 安装包
+        run: |
+          $bundlePath = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'
+          $outputPath = 'src-tauri/target/windows-installers'
+          $version = (Get-Content -LiteralPath 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
+          $installers = @(Get-ChildItem -Path $bundlePath -Filter '*.exe' -File)
+          if ($installers.Count -ne 1) { throw "User 安装包数量异常：$($installers.Count)" }
+          New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
+          Move-Item -LiteralPath $installers[0].FullName -Destination "$outputPath/Timelet_${version}_x64-user-setup.exe"
+
+      - name: 构建 System 安装包
+        run: pnpm bundle:windows:system
+
+      - name: 暂存 System 安装包
+        run: |
+          $bundlePath = 'src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'
+          $outputPath = 'src-tauri/target/windows-installers'
+          $version = (Get-Content -LiteralPath 'src-tauri/tauri.conf.json' -Raw | ConvertFrom-Json).version
+          $installers = @(Get-ChildItem -Path $bundlePath -Filter '*.exe' -File)
+          if ($installers.Count -ne 1) { throw "System 安装包数量异常：$($installers.Count)" }
+          Move-Item -LiteralPath $installers[0].FullName -Destination "$outputPath/Timelet_${version}_x64-system-setup.exe"
+
+      - name: 生成安装包校验和
+        run: |
+          $bundlePath = 'src-tauri/target/windows-installers'
+          $installers = @(Get-ChildItem -Path $bundlePath -Filter '*.exe' -File)
+          if ($installers.Count -ne 2) { throw "最终安装包数量异常：$($installers.Count)" }
+          $checksums = $installers | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          $checksums | Set-Content -LiteralPath "$bundlePath/SHA256SUMS.txt" -Encoding utf8
+          $checksums
+
+      - name: 保存 User 版（7 天）
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Timelet-windows-x64-user-${{ github.sha }}
+          path: |
+            src-tauri/target/windows-installers/*-user-setup.exe
+            src-tauri/target/windows-installers/SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: 保存 System 版（7 天）
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Timelet-windows-x64-system-${{ github.sha }}
+          path: |
+            src-tauri/target/windows-installers/*-system-setup.exe
+            src-tauri/target/windows-installers/SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error
+
+  macos:
+    name: 检查并构建 macOS Apple Silicon
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          architecture: arm64
+          package-manager-cache: false
+
+      - name: 配置构建工具
+        run: |
+          test "$(uname -m)" = arm64
+          npm install --global pnpm@11.9.0
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+          rustc --version --verbose
+          xcodebuild -version
+
+      - name: 安装依赖并检查前端
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm lint
+          pnpm test
+          pnpm check:desktop
+
+      - name: 检查 Rust
+        working-directory: src-tauri
+        run: |
+          cargo fmt --check
+          cargo test --locked --lib
+          cargo clippy --locked --all-targets -- -D warnings
+
+      - name: 构建 APP 与 DMG
+        run: pnpm bundle:mac
+
+      - name: 归档应用并校验
+        run: |
+          outputPath=src-tauri/target/macos-installers
+          mkdir -p "$outputPath"
+          tar -czf "$outputPath/Timelet_macos_arm64.app.tar.gz" -C src-tauri/target/release/bundle/macos Timelet.app
+          images=(src-tauri/target/release/bundle/dmg/*.dmg)
+          test "${#images[@]}" -eq 1
+          hdiutil verify "${images[0]}"
+          cp "${images[0]}" "$outputPath/"
+          cd "$outputPath"
+          shasum -a 256 *.dmg *.tar.gz > SHA256SUMS.txt
+
+      - name: 保存 macOS 产物（7 天）
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Timelet-macos-arm64-${{ github.sha }}
+          path: src-tauri/target/macos-installers/*
+          retention-days: 7
+          if-no-files-found: error
