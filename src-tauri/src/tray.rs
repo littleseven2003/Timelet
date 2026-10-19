@@ -35,7 +35,10 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let builder = TrayIconBuilder::with_id("main-tray")
         // 托盘使用独立的黑色字形图标：实底应用图标作模板渲染会变成色块
         .icon(tauri::include_image!("icons/tray.png"))
-        .tooltip("Timelet（时屿）")
+        .tooltip(format!(
+            "{}（时屿）",
+            app.config().product_name.as_deref().unwrap_or("Timelet")
+        ))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {
@@ -139,7 +142,10 @@ fn open_main_now(app: &AppHandle, action: Option<EntryAction>) {
         "config",
         tauri::WebviewUrl::App("index.html".into()),
     )
-    .title("时屿 · Timelet")
+    .title(format!(
+        "时屿 · {}",
+        app.config().product_name.as_deref().unwrap_or("Timelet")
+    ))
     .min_inner_size(700.0, 520.0);
 
     #[cfg(target_os = "windows")]

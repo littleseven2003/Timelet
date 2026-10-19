@@ -3,6 +3,9 @@ mod settings;
 mod storage;
 mod tray;
 
+#[cfg(target_os = "macos")]
+pub mod notifications;
+
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
 
