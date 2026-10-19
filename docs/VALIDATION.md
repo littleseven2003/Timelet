@@ -1,5 +1,17 @@
 # 本轮界面与可靠性验收记录
 
+## 2026-10-19 macOS 混合缩放双屏定位
+
+项目所有者确认双屏分辨率及大小不同：外接屏菜单栏点击定位正常，内置屏点击却在外接屏弹出。代码及当前依赖实现复核发现：托盘矩形按其所属屏幕缩放输出，而窗口物理位置按窗口原屏幕缩放还原；原定位函数混用这两种比例，并将物理坐标传入当前 macOS 运行时接收逻辑坐标的屏幕查询。
+
+修复提交 `223bccd` 独立处理 macOS 定位：按主屏比例还原当前指针，确定点击屏幕；按目标屏比例还原图标及屏幕边界，最终传入逻辑位置。图标矩形未覆盖点击位置时退回点击横坐标与目标屏菜单栏区域，防止采用另一屏的矩形；面板受目标屏边界约束。Windows 使用原定位路径。
+
+验证：前端 lint、10 项业务测试、类型及生产构建通过；Rust 15 项测试（新增 3 项定位计算回归）、格式及 Clippy 通过。用例覆盖 1×/2× 坐标还原、左右/上下排列、负坐标、边缘和极小屏幕。沙盒首次 Rust 测试出现 Xcode SDK 缓存访问告警，同一命令在正常本机权限下重试通过，无源码告警。
+
+本机 `pnpm bundle:mac` 成功生成正式应用标识的 arm64 Release APP 和 DMG，DMG 通过 `hdiutil verify`。测试包尚未替换正在使用的应用；本次只确认编译、打包与镜像完整性，不作为双屏交互通过的证据。版本仍为 `0.1.0`，通过提交 `223bccd` 区分此次修复。
+
+待原生复验：内置屏点击、外接屏点击、失焦收起后交替点击、不同屏幕排列、拔插外接屏；不得据计算回归宣布双屏已修复验收。Windows 手动测试已按要求暂停，历史结果保留；M4 保持未完整验收状态。
+
 ## 多平台远程构建入口
 
 `7961bd0` 扩展同一次运行中的 macOS arm64 与 Windows x64 作业，并拆分三个下载入口。[运行 34182610598](https://github.com/littleseven2003/Timelet/actions/runs/34182610598) 的 macOS 与 Windows 作业均成功，分别生成 macOS 产物和两种 Windows 安装范围；该运行早于单实例修复。
@@ -18,7 +30,7 @@ Windows 11 x64 管理员安装版实测发现：Timelet 已运行后再次双击
 
 后续 Windows 下载入口和文件名使用 User/System：User 对应 `currentUser` 与 `%LOCALAPPDATA%`，System 对应 `perMachine`、`Program Files` 和 UAC。构建命令及附加配置同步改为 `bundle:windows:system` 与 `tauri.windows.system.conf.json`；安装行为没有变化。此前运行中的 `current-user`、`admin` 文件名是历史真实产物，保留原记录。
 
-命名提交 `5136770` 经[运行 34190339804](https://github.com/littleseven2003/Timelet/actions/runs/34190339804) 验证：macOS 作业 6 分 39 秒完成，Windows 作业 12 分 12 秒完成，全部检查、两种 NSIS 构建、暂存、校验和与上传步骤通过。实际下载入口为 `Timelet-macos-arm64-cb5b9f7…`、`Timelet-windows-x64-user-cb5b9f7…` 和 `Timelet-windows-x64-system-cb5b9f7…`，均处于有效状态并保留 7 天。该运行证明新名称和构建链路可用，不替代 User/System 在目标 Windows 电脑上的分别安装与升级验收。
+命名提交 `5136770` 经[运行 34190339804](https://github.com/littleseven2003/Timelet/actions/runs/34190339804) 验证：macOS 作业 6 分 39 秒完成，Windows 作业 12 分 12 秒完成，全部检查、两种 NSIS 构建、暂存、校验和与上传步骤通过。当时下载入口为 `Timelet-macos-arm64-cb5b9f7…`、`Timelet-windows-x64-user-cb5b9f7…` 和 `Timelet-windows-x64-system-cb5b9f7…`，产物保留期为 7 天；此处为历史记录，不表示当前仍可下载。该运行证明新名称和构建链路可用，不替代 User/System 在目标 Windows 电脑上的分别安装与升级验收。
 
 日期：2026-09-01。原 P0/P1 复查起点：`2c74c26`；本次分支：`feat/recurrence-and-panel-polish`。本次代码验收基线：`24d48dc`。当前版本保持 `0.1.0`。
 

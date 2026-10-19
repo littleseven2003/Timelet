@@ -615,6 +615,9 @@
 
 1. **存储**：本地 JSON 文件，位于系统标准应用数据目录（macOS `~/Library/Application Support/`，Windows `%APPDATA%`），写入采用"写临时文件 + 原子替换"避免损坏；条目与设置、窗口状态分文件存储。
 2. **窗口定位**：弹出面板显示前，通过托盘图标在屏幕上的坐标计算窗口位置（macOS 在图标下方、Windows 在任务栏上方），差异封装在 Rust 侧统一函数内。
+
+   macOS 混合缩放多屏约定（2026-10-19）：每次弹出以点击时指针所在屏幕为目标；指针坐标按主屏比例还原，图标和目标屏幕边界按目标屏幕比例还原，最终以桌面逻辑坐标移动面板。图标矩形与指针不匹配时，使用点击横坐标和目标屏菜单栏区域作为锚点；面板受目标屏幕边界约束。定位不得依赖隐藏面板上次所在屏幕的缩放。两屏交替点击、左右及上下排列、不同缩放、负坐标和拔插后重算均需原生验收。Windows 保留现有任务栏定位路径。
+
 3. **收起行为**：监听窗口失焦事件自动隐藏面板，两个平台行为一致。
 4. **数据倒计时计算**：前端按本地时区计算，纯日期条目按自然日（非 24 小时制），带时刻条目按分钟精度并对齐"下一次发生"（循环条目）。
 
@@ -667,7 +670,7 @@ Windows **User 版**使用 `currentUser`，默认写入 `%LOCALAPPDATA%\Timelet`
 
 本批不配置 Developer ID/Windows 发布证书或公证服务；macOS 二进制可能含本地运行所需的临时签名，不视为已完成分发签名。安装包用于验证，不创建 Release 或发布标签。经确认新增 Windows x64 远程构建工作流：功能分支代码或构建配置推送触发，合入默认分支后支持手动触发；仅授予源码读取权限，执行静态检查、业务回归及两类 NSIS 打包，安装包与校验和作为构建产物保留 7 天，不自动合并。Windows 安装、任务栏显隐、自启、托盘与数据重启须在真实系统环境中验收；M3 剩余待办不随打包自动通过。
 
-首批结果：macOS arm64 Release APP/DMG 已生成，包信息、镜像完整性及隔离副本的保存/重启、Dock 设置恢复通过。现有 Windows 11 虚拟机为 ARM64 且未发现构建工具链；Windows x64 远程构建已通过，生成 NSIS 安装程序，前端 10 项与 Rust 12 项回归及静态检查通过。Windows ARM 仿真安装与原生 x64 桌面验收均未完成，M4 仍未完整验收。详细测试范围见 [验收记录](VALIDATION.md)。
+当前结果（2026-10-19）：macOS arm64 APP/DMG 与 Windows x64 User/System 构建链路已通过；Windows ARM 仿真环境此前已完成部分安装和窗口交互复验，原生 x64 的近期使用反馈未逐项覆盖完整验收。Windows 手动测试现已暂停，远程构建继续保留。macOS 混合缩放双屏发现“内置屏点击却在外接屏弹出”的缺陷，修复后须在双屏实机复验。M4 仍未完整验收。详细范围见 [验收记录](VALIDATION.md)。
 
 依据：[Tauri macOS 打包](https://v2.tauri.app/distribute/macos-application-bundle/)、[Windows 安装包与 WebView2](https://v2.tauri.app/distribute/windows-installer/)、[Tauri 单实例组件](https://v2.tauri.app/plugin/single-instance/)。
 
