@@ -273,6 +273,7 @@ fn hide_panel(panel: &WebviewWindow, state: &PanelBlurState) {
 }
 
 // 双平台定位：macOS 面板出现在菜单栏图标正下方，Windows 出现在任务栏图标上方
+#[cfg(not(target_os = "macos"))]
 fn position_panel(panel: &WebviewWindow, icon_pos: Position, icon_size: Size) -> tauri::Result<()> {
     let scale = panel.scale_factor()?;
     let width = PANEL_LOGICAL_WIDTH * scale;
@@ -316,4 +317,119 @@ fn position_panel(panel: &WebviewWindow, icon_pos: Position, icon_size: Size) ->
     }
 
     panel.set_position(tauri::PhysicalPosition::new(x, y))
+}
+
+#[cfg(target_os = "macos")]
+fn position_panel(panel: &WebviewWindow, icon_pos: Position, icon_size: Size) -> tauri::Result<()> {
+    let Some(primary) = panel.primary_monitor()? else {
+        return Err(std::io::Error::other("无法获取主显示器").into());
+    };
+    // macOS 指针接口以主屏比例输出，不能按隐藏面板原屏幕的比例还原。
+    let cursor = panel
+        .cursor_position()?
+        .to_logical::<f64>(primary.scale_factor());
+    // 当前运行时的 macOS 屏幕查询接收桌面逻辑坐标。
+    let Some(monitor) = panel.monitor_from_point(cursor.x, cursor.y)? else {
+        return Err(std::io::Error::other("无法获取点击所在显示器").into());
+    };
+    let scale = monitor.scale_factor();
+    let origin = monitor.position().to_logical::<f64>(scale);
+    let size = monitor.size().to_logical::<f64>(scale);
+    let icon = icon_pos.to_logical::<f64>(scale);
+    let icon_size = icon_size.to_logical::<f64>(scale);
+    let height = panel
+        .outer_size()?
+        .to_logical::<f64>(panel.scale_factor()?)
+        .height;
+
+    // 系统多屏菜单栏可能保留另一屏的图标矩形，此时以本次点击位置为锚点。
+    let matches_click = cursor.x >= icon.x
+        && cursor.x <= icon.x + icon_size.width
+        && cursor.y >= icon.y
+        && cursor.y <= icon.y + icon_size.height;
+    let (center_x, bottom_y) = if matches_click {
+        (icon.x + icon_size.width / 2.0, icon.y + icon_size.height)
+    } else {
+        (cursor.x, origin.y + icon_size.height)
+    };
+    let (x, y) = panel_position_in_bounds(
+        center_x,
+        bottom_y,
+        (origin.x, origin.y, size.width, size.height),
+        height,
+    );
+    // 直接传逻辑坐标，跨屏移动不依赖窗口移动前的 backing scale。
+    panel.set_position(tauri::LogicalPosition::new(x, y))
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn panel_position_in_bounds(
+    center_x: f64,
+    bottom_y: f64,
+    bounds: (f64, f64, f64, f64),
+    height: f64,
+) -> (f64, f64) {
+    let (left, top, width, screen_height) = bounds;
+    let right = left + (width - PANEL_LOGICAL_WIDTH).max(0.0);
+    let bottom = top + (screen_height - height).max(0.0);
+    (
+        (center_x - PANEL_LOGICAL_WIDTH / 2.0).clamp(left, right),
+        (bottom_y + PANEL_GAP).clamp(top, bottom),
+    )
+}
+
+#[cfg(test)]
+mod positioning_tests {
+    use super::panel_position_in_bounds;
+
+    #[test]
+    fn mixed_scale_anchor_is_independent_of_previous_panel_screen() {
+        let desktop_anchor = tauri::LogicalPosition::new(1600.0, 24.0);
+        for clicked_scale in [1.0, 2.0] {
+            let event = desktop_anchor.to_physical::<f64>(clicked_scale);
+            let anchor = event.to_logical::<f64>(clicked_scale);
+            let position =
+                panel_position_in_bounds(anchor.x, anchor.y, (1470.0, 0.0, 1920.0, 1080.0), 420.0);
+            assert_eq!(position, (1470.0, 29.0));
+        }
+    }
+
+    #[test]
+    fn panel_stays_on_clicked_screen_across_desktop_arrangements() {
+        for (bounds, anchor, expected) in [
+            ((0.0, 0.0, 1470.0, 956.0), (1000.0, 25.0), (840.0, 30.0)),
+            (
+                (-1920.0, 0.0, 1920.0, 1080.0),
+                (-20.0, 24.0),
+                (-320.0, 29.0),
+            ),
+            (
+                (0.0, -1080.0, 1920.0, 1080.0),
+                (15.0, -1056.0),
+                (0.0, -1051.0),
+            ),
+            (
+                (1470.0, 956.0, 1920.0, 1080.0),
+                (2000.0, 980.0),
+                (1840.0, 985.0),
+            ),
+        ] {
+            assert_eq!(
+                panel_position_in_bounds(anchor.0, anchor.1, bounds, 420.0),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn small_screen_and_bottom_edge_do_not_invert_bounds() {
+        assert_eq!(
+            panel_position_in_bounds(200.0, 270.0, (0.0, 0.0, 250.0, 300.0), 420.0),
+            (0.0, 0.0)
+        );
+        assert_eq!(
+            panel_position_in_bounds(1000.0, 900.0, (0.0, 0.0, 1470.0, 956.0), 420.0),
+            (840.0, 536.0)
+        );
+    }
 }
