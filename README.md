@@ -14,7 +14,7 @@
 - 数据保存在本机；覆盖前备份，读取异常停止写入，保存失败保留草稿
 - 中文界面（预留多语言结构）
 
-> 当前版本 `0.1.0`，M3 开发成果已合入主干，M4 双平台构建正在推进；尚未完成全部桌面与发布验收。独立提醒和系统通知尚未实现，重复频率只更新倒数时间。设计及当前边界见 [设计文档](docs/DESIGN.md)，测试结果见 [验收记录](docs/VALIDATION.md)。
+> 当前版本 `0.1.0`，当前优先完成 macOS 适配，M4 按 macOS 范围收尾；Windows 开发、远程构建及手动验收移至后续阶段。尚未完成全部桌面与发布验收。独立提醒和系统通知尚未实现，重复频率只更新倒数时间。设计及当前边界见 [设计文档](docs/DESIGN.md)，测试结果见 [验收记录](docs/VALIDATION.md)。
 
 ## 开发
 
@@ -43,9 +43,9 @@ macOS 命令按本机构架构建，当前 Apple Silicon 产物不是 Intel/Univ
 
 Windows 安装界面为简体中文，同时提供 User 版与 System 版。User 版安装到当前用户目录且通常无需提升权限；System 版安装到 `Program Files` 并自动请求 UAC。普通环境优先使用 User 版；若设备策略禁止普通权限写入可执行文件，使用 System 版。两种安装范围应保持一致，切换前先卸载原安装，默认不删除应用数据。安装、更新或卸载时如果 Timelet 正在运行，安装程序会先提示关闭。缺少 WebView2 时需要联网下载并安装运行时；Windows ARM 上的 x64 仿真测试与原生 x64 验收分别记录。
 
-公开仓库尚未发布正式安装包。“macOS 与 Windows 安装包构建”工作流在 `feat/platform-build` 的代码或构建配置推送时触发。macOS arm64 与 Windows x64 作业并行检查和打包，使用 Node.js 24、pnpm 11.9.0 和 Rust stable。工作流合入默认分支后可手动触发。
+公开仓库尚未发布正式安装包。“macOS 安装包构建”工作流在 `main` 和 `feat/platform-build` 的代码或构建配置推送时触发，并支持手动触发。当前仅执行 macOS arm64 检查和打包，使用 Node.js 24、pnpm 11.9.0 和 Rust stable。工作流文件沿用 `.github/workflows/windows-build.yml` 路径，Windows 作业暂停，已有本地 User/System 构建配置保留供后续恢复。
 
-运行完成后，在 Actions 运行详情底部的 Artifacts 分别下载 `Timelet-macos-arm64-…`、`Timelet-windows-x64-user-…`、`Timelet-windows-x64-system-…`。macOS 入口包含 DMG 和保留权限的 APP 归档，Windows 每个入口包含对应 EXE；均附校验文件，保留 7 天。
+运行完成后，在 Actions 运行详情底部的 Artifacts 下载 `Timelet-macos-arm64-…`，包含 DMG、保留权限的 APP 归档和校验文件，保留 7 天。当前运行不生成 Windows 产物；历史 User/System 产物按原保留期处理。
 
 在仓库 Actions 中打开对应运行，检查提交号及结果后下载所需平台和安装范围的构建产物；内含安装程序与 `SHA256SUMS.txt`，仅保留 7 天，下载需要登录 GitHub。产物未经发布签名，不是正式 Release；构建成功不能代替安装和桌面交互验收。完整键盘操作、200% 缩放、多屏、系统变化等待办继续在验收记录中跟踪。
 
