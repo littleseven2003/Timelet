@@ -431,4 +431,4 @@ P2 含三类条目的基础通知：独立提醒必须填写日期和时刻，�
 
 正式应用仅编译适配模块，尚未初始化通知或增加用户侧提醒入口；示例 APP 使用独立 bundle identifier，不初始化条目/设置存储。测试包在被忽略的 `temp/TimeletNotificationCheck.app`，验证程序只记录完成/稍后回调，不进行真实条目写入或重调度。`4c37505` 将 macOS 工作流覆盖 `main`、`feat/**`、`fix/**`，Windows 作业继续跳过。
 
-本地前端 10 项、Rust 17 项（新增原生载荷与非法响应校验）、格式、Clippy 与示例编译通过。[macOS 运行 39192066009](https://github.com/littleseven2003/Timelet/actions/runs/39192066009)（`88fc7c0`）检查及 APP/DMG 打包通过，Windows 作业跳过。项目所有者操作后，独立 APP 已记录授权成功，以及 `open`、`complete`、`snooze` 三种原生动作和完整测试标识；该程序不执行真实完成写盘或稍后重调度。明确拒绝后恢复、前后台显示、打开窗口效果、隐藏 Dock 后操作和撤回仍需验证，最低 macOS 12 设备尚未实测。P2-A 尚未完整验收，P2-B 数据迁移与后台调度不提前开始。
+本地前端 10 项、Rust 17 项（新增原生载荷与非法响应校验）、格式、Clippy 与示例编译通过。[macOS 运行 39192066009](https://github.com/littleseven2003/Timelet/actions/runs/39192066009)（`88fc7c0`）检查及 APP/DMG 打包通过，Windows 作业跳过。项目所有者操作后，独立 APP 已记录授权成功，以及 `open`、`complete`、`snooze` 三种原生动作和完整测试标识；该程序不执行真实完成写盘或稍后重调度。追加确认权限为 `authorized` 且横幅允许；通知已进入系统已投递列表，撤回后待投递与已投递列表均为空。明确拒绝后恢复、前后台显示、打开窗口效果和隐藏 Dock 后操作仍需验证，最低 macOS 12 设备尚未实测。P2-A 尚未完整验收，P2-B 数据迁移与后台调度不提前开始。
