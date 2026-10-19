@@ -670,7 +670,7 @@ Windows **User 版**使用 `currentUser`，默认写入 `%LOCALAPPDATA%\Timelet`
 
 本批不配置 Developer ID/Windows 发布证书或公证服务；macOS 二进制可能含本地运行所需的临时签名，不视为已完成分发签名。安装包用于验证，不创建 Release 或发布标签。经确认新增 Windows x64 远程构建工作流：功能分支代码或构建配置推送触发，合入默认分支后支持手动触发；仅授予源码读取权限，执行静态检查、业务回归及两类 NSIS 打包，安装包与校验和作为构建产物保留 7 天，不自动合并。Windows 安装、任务栏显隐、自启、托盘与数据重启须在真实系统环境中验收；M3 剩余待办不随打包自动通过。
 
-当前结果（2026-10-19）：macOS arm64 APP/DMG 与 Windows x64 User/System 构建链路已通过；Windows ARM 仿真环境此前已完成部分安装和窗口交互复验，原生 x64 的近期使用反馈未逐项覆盖完整验收。Windows 手动测试现已暂停，远程构建继续保留。macOS 混合缩放双屏发现“内置屏点击却在外接屏弹出”的缺陷，修复后须在双屏实机复验。M4 仍未完整验收。详细范围见 [验收记录](VALIDATION.md)。
+当前结果（2026-10-19）：macOS arm64 APP/DMG 与 Windows x64 User/System 构建链路已通过；修复基线 `2f9a546` 对应远程运行 `39187410267` 的全部检查及三类产物成功。Windows ARM 仿真环境此前已完成部分安装和窗口交互复验，原生 x64 的近期使用反馈未逐项覆盖完整验收。Windows 手动测试现已暂停，远程构建继续保留。macOS 混合缩放双屏的“内置屏点击却在外接屏弹出”缺陷，在启动修复版后获项目所有者实机确认恢复正常；其他排列、拔插和完整缩放矩阵仍待验收。M4 仍未完整验收，开发成果合并须另行确认保留待办的范围。详细结果与合并准备清单见 [验收记录](VALIDATION.md)。
 
 依据：[Tauri macOS 打包](https://v2.tauri.app/distribute/macos-application-bundle/)、[Windows 安装包与 WebView2](https://v2.tauri.app/distribute/windows-installer/)、[Tauri 单实例组件](https://v2.tauri.app/plugin/single-instance/)。
 
