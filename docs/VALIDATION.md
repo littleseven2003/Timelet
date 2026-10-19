@@ -8,9 +8,13 @@ P2 计划已获项目所有者确认并以 `9da884c` 整合主干。实现分支
 
 已通过：前端 lint、10 项业务测试、类型和生产构建，Rust 格式、17 项测试、所有目标 Clippy，以及 `pnpm check:desktop` 调试编译；未新增依赖版本，仅将批准的 4 项原生绑定转为直接依赖并启用所需 feature。新增 2 项测试实际构造原生通知内容/请求，验证动作及标识还原，并拒绝错误类别、非字符串字段、空标识、未知动作和关闭通知动作。chrono 留待 P2-B 接入。
 
-原生启动证据：测试 APP 显示专用验证窗口与菜单，未自动弹出权限请求；系统初始状态为 `notDetermined`，`alertsEnabled=false`、`notificationCenterEnabled=true`。通过菜单显式请求授权后，仍需系统界面处理。当前界面工具明确拒绝访问 `com.apple.UserNotificationCenter`，因此无法代为操作该授权窗口；未尝试其他方式绕过限制。
+原生实测证据：测试 APP 启动时未自动请求授权，初始状态为 `notDetermined`。项目所有者操作系统授权与测试通知后，窗口先记录一次 `Notifications are not allowed for this application`，随后记录 `授权结果：Ok(true)` 和系统接受请求。该记录证明授权最终成功，不单独作为完整的拒绝后恢复流程验收。
 
-待项目所有者实测：授权拒绝/允许及恢复、前后台显示、通知中的完成/稍后回调、点击通知打开测试窗口、隐藏 Dock 后操作和撤回。发送成功回执只表示系统接受，不作为用户已看到的证据。P2-A 保持未通过完整原生验收，后续迁移与调度不提前实施。具体步骤在本地忽略的 `temp/P2-A_macOS原生通知验证.md`。
+已观察到三种真实系统动作回调：`timelet-check-73781-1` 为 `open`、`timelet-check-73781-0` 为 `complete`、`timelet-check-73781-2` 为 `snooze`，均保留测试条目与修订标识。这证明系统通知动作已返回验证程序；不代表真实条目已完成、已重调度，也未单独核实点击通知后的窗口恢复效果。
+
+[macOS 运行 39192066009](https://github.com/littleseven2003/Timelet/actions/runs/39192066009)（`88fc7c0`）通过检查及 APP/DMG 构建，macOS 作业耗时 4 分 46 秒，Windows 作业跳过。
+
+仍待验证：明确拒绝后从系统设置恢复、前后台显示、点击通知恢复测试窗口、隐藏 Dock 后操作和撤回。发送成功回执只表示系统接受，不作为用户已看到的证据。P2-A 保持未通过完整原生验收，后续迁移与调度不提前实施。具体步骤在本地忽略的 `temp/P2-A_macOS原生通知验证.md`。
 
 验证入口最初使用 data URL，被现有 WebView 配置拒绝；已改为专用本地 URI scheme，未扩大正式应用的 data URL 或前端权限。原生最低 macOS 12 设备仍未实测。
 
