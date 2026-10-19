@@ -1,8 +1,8 @@
-name: macOS 与 Windows 安装包构建
+name: macOS 安装包构建
 
 on:
   push:
-    branches: [feat/platform-build]
+    branches: [main, feat/platform-build]
     paths:
       - .github/workflows/windows-build.yml
       - src/**
@@ -24,6 +24,8 @@ concurrency:
 
 jobs:
   build:
+    # Windows 适配移至后续阶段，恢复时再启用此作业。
+    if: ${{ false }}
     name: 检查并构建双 NSIS 安装包
     runs-on: windows-2022
     timeout-minutes: 45
