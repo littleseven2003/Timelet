@@ -1,4 +1,5 @@
 mod persistence;
+pub mod reminders;
 mod settings;
 mod storage;
 mod tray;
