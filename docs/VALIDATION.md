@@ -1,8 +1,22 @@
 # 本轮界面与可靠性验收记录
 
+## 2026-10-19 P2-A macOS 原生通知验证
+
+P2 计划已获项目所有者确认并以 `9da884c` 整合主干。实现分支为 `feat/macos-notifications`，依赖提交 `a719ccb`、适配与验证入口提交 `e889535`、macOS 工作流分支覆盖提交 `4c37505`。
+
+本次只接入原生通知适配，正式 APP 尚未初始化该模块或展示提醒功能。隔离验证入口为 `src-tauri/examples/notification_probe.rs`，以 `com.littleseven.timelet.notification-check` 单独打包并作本地临时签名，位于被忽略的 `temp/TimeletNotificationCheck.app`；不读取条目或设置，不执行迁移、完成写盘或稍后重调度。
+
+已通过：前端 lint、10 项业务测试、类型和生产构建，Rust 格式、17 项测试、所有目标 Clippy，以及 `pnpm check:desktop` 调试编译；未新增依赖版本，仅将批准的 4 项原生绑定转为直接依赖并启用所需 feature。新增 2 项测试实际构造原生通知内容/请求，验证动作及标识还原，并拒绝错误类别、非字符串字段、空标识、未知动作和关闭通知动作。chrono 留待 P2-B 接入。
+
+原生启动证据：测试 APP 显示专用验证窗口与菜单，未自动弹出权限请求；系统初始状态为 `notDetermined`，`alertsEnabled=false`、`notificationCenterEnabled=true`。通过菜单显式请求授权后，仍需系统界面处理。当前界面工具明确拒绝访问 `com.apple.UserNotificationCenter`，因此无法代为操作该授权窗口；未尝试其他方式绕过限制。
+
+待项目所有者实测：授权拒绝/允许及恢复、前后台显示、通知中的完成/稍后回调、点击通知打开测试窗口、隐藏 Dock 后操作和撤回。发送成功回执只表示系统接受，不作为用户已看到的证据。P2-A 保持未通过完整原生验收，后续迁移与调度不提前实施。具体步骤在本地忽略的 `temp/P2-A_macOS原生通知验证.md`。
+
+验证入口最初使用 data URL，被现有 WebView 配置拒绝；已改为专用本地 URI scheme，未扩大正式应用的 data URL 或前端权限。原生最低 macOS 12 设备仍未实测。
+
 ## 2026-10-19 macOS 阶段收尾范围
 
-主干整合节点为 `223ea39`；[主干运行 39189971694](https://github.com/littleseven2003/Timelet/actions/runs/39189971694) 最终状态为成功。本地与远端已同步，已合并的 `feat/platform-build` 分支已安全删除。下一阶段在 `docs/macos-reminder-plan` 准备 P2 计划，尚未新增通知依赖、执行迁移、请求通知权限或实现提醒功能。
+主干整合节点为 `223ea39`；[主干运行 39189971694](https://github.com/littleseven2003/Timelet/actions/runs/39189971694) 最终状态为成功。本地与远端已同步，已合并的 `feat/platform-build` 分支已安全删除。该收尾节点尚无通知依赖、迁移或提醒实现；后续 P2-A 进展见本记录顶部。
 
 项目所有者在合并准备复核后确认 macOS 优先，Windows 开发、远程构建和验收移至后续；当前 macOS 版本测试通过即可完成本阶段。此决定替代下文历史记录中将 Windows 验收作为本阶段阻塞项的安排。当前应用源码已通过本地前端 10 项、Rust 15 项回归、静态检查和 macOS 打包；当前双屏点击定位已获用户实机确认，修复基线的远程运行 `39187410267` 全部通过。
 

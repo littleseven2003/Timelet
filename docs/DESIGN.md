@@ -217,6 +217,8 @@
 
 macOS 优先的 P2 详细实施计划见 [实施计划第 23 节](EVOLUTION_PLAN.md#23-p2-macos-基础提醒闭环实施计划已确认2026-10-19)。项目所有者已确认原生通知方案、直接依赖、保留数据迁移及默认规则，先验证 P2-A 原生能力；本节目标体验及现有版本 2 存储说明不因此变为已实装。Windows 提醒适配在后续阶段恢复。
 
+P2-A 进度：macOS 原生适配与独立通知验证程序已接入，生产应用尚未启用提醒入口或自动请求授权。完成/稍后按钮当前仅在验证程序中记录动作，需通过真实系统通知复验后，再连接发生记录和调度；数据仍为版本 2。
+
 提醒能力服务于三种类型，而不只属于"提醒"类型：
 
 - 倒数日：支持当天、提前若干天或多个关键节点提醒；
@@ -655,7 +657,7 @@ Windows 主窗口创建约定（2026-09-08）：托盘菜单、快捷面板和�
 
 ### 11.1 M4 打包约定（2026-10-19 调整）
 
-当前远程构建仅执行 macOS Apple Silicon（arm64）检查并提供 DMG 与 APP 归档，APP 先归档以保留执行权限和符号链接，附 SHA-256 校验文件，产物保留 7 天。工作流沿用 `.github/workflows/windows-build.yml` 路径，显示名称为“macOS 安装包构建”，`main` 和当前功能分支的代码/构建配置推送触发，亦可手动运行。Windows 作业明确暂停，保留 User/System 配置和历史构建证据，待后续适配阶段启用。macOS 当前不包含 Intel 或 Universal 构建。
+当前远程构建仅执行 macOS Apple Silicon（arm64）检查并提供 DMG 与 APP 归档，APP 先归档以保留执行权限和符号链接，附 SHA-256 校验文件，产物保留 7 天。工作流沿用 `.github/workflows/windows-build.yml` 路径，显示名称为“macOS 安装包构建”，`main`、`feat/**` 和 `fix/**` 的代码/构建配置推送触发，亦可手动运行。Windows 作业明确暂停，保留 User/System 配置和历史构建证据，待后续适配阶段启用。macOS 当前不包含 Intel 或 Universal 构建。
 
 共用配置为 `src-tauri/tauri.conf.json`，平台配置由同目录的 `tauri.macos.conf.json`、`tauri.windows.conf.json` 自动合并。不混用两端系统图标资源，不改变应用标识或本地数据位置。
 

@@ -43,7 +43,7 @@ macOS 命令按本机构架构建，当前 Apple Silicon 产物不是 Intel/Univ
 
 Windows 安装界面为简体中文，同时提供 User 版与 System 版。User 版安装到当前用户目录且通常无需提升权限；System 版安装到 `Program Files` 并自动请求 UAC。普通环境优先使用 User 版；若设备策略禁止普通权限写入可执行文件，使用 System 版。两种安装范围应保持一致，切换前先卸载原安装，默认不删除应用数据。安装、更新或卸载时如果 Timelet 正在运行，安装程序会先提示关闭。缺少 WebView2 时需要联网下载并安装运行时；Windows ARM 上的 x64 仿真测试与原生 x64 验收分别记录。
 
-公开仓库尚未发布正式安装包。“macOS 安装包构建”工作流在 `main` 和 `feat/platform-build` 的代码或构建配置推送时触发，并支持手动触发。当前仅执行 macOS arm64 检查和打包，使用 Node.js 24、pnpm 11.9.0 和 Rust stable。工作流文件沿用 `.github/workflows/windows-build.yml` 路径，Windows 作业暂停，已有本地 User/System 构建配置保留供后续恢复。
+公开仓库尚未发布正式安装包。“macOS 安装包构建”工作流在 `main`、`feat/**` 和 `fix/**` 的代码或构建配置推送时触发，并支持手动触发。当前仅执行 macOS arm64 检查和打包，使用 Node.js 24、pnpm 11.9.0 和 Rust stable。工作流文件沿用 `.github/workflows/windows-build.yml` 路径，Windows 作业暂停，已有本地 User/System 构建配置保留供后续恢复。
 
 运行完成后，在 Actions 运行详情底部的 Artifacts 下载 `Timelet-macos-arm64-…`，包含 DMG、保留权限的 APP 归档和校验文件，保留 7 天。当前运行不生成 Windows 产物；历史 User/System 产物按原保留期处理。
 
