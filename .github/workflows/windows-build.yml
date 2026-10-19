@@ -2,7 +2,7 @@ name: macOS 安装包构建
 
 on:
   push:
-    branches: [main, feat/platform-build]
+    branches: [main, 'feat/**', 'fix/**']
     paths:
       - .github/workflows/windows-build.yml
       - src/**
